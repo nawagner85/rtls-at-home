@@ -2,6 +2,19 @@
 
 All notable changes to RTLS@Home. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 - 2026-09-25
+
+### Added
+
+- Away: a tracked device that goes quiet stays listed. Its room and floor read `Away`, and its location says when
+  and where it was last detected.
+- A `device_tracker` entity per tracked device (`home` / `not_home`).
+- Devices removed in the engine are deleted from Home Assistant; renames in the engine follow through, but never
+  over a name set in Home Assistant.
+- Onboarding support: while the engine's onboarding panel is open, a detailed census every 5 s (each proxy's
+  median signal, when the device was first heard, and its address type), so the engine can place untracked
+  devices on its map.
+
 ## 0.1.0 - 2026-09-25
 
 First release: the Home Assistant bridge.

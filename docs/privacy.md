@@ -13,6 +13,10 @@ Only to the engine URL you configured:
 - **Nearby devices:** about every 10 seconds, the devices heard in the last minute (address and/or iBeacon identity,
   advertised name, signal strength, how many proxies heard it). This lets you choose new devices to track. It can
   include neighbours' devices that your proxies happen to hear.
+- **Onboarding detail:** only while the engine's onboarding panel is open (and for at most 30 s after it closes),
+  the nearby-device list comes every 5 s and adds each proxy's recent signal readings, when the device was first
+  heard, and its address type, so the engine can place devices on its map. This also covers devices that aren't
+  yours. The engine keeps them in memory only and never writes them to disk.
 
 ## What Home Assistant stores
 

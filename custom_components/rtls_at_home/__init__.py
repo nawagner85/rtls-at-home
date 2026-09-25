@@ -12,7 +12,7 @@ from .client import EngineClient
 from .const import CONF_TOKEN, CONF_URL
 from .runner import BridgeRunner
 
-PLATFORMS = [Platform.SENSOR]
+PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR]
 
 type RtlsConfigEntry = ConfigEntry[BridgeRunner]
 

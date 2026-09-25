@@ -48,17 +48,24 @@ Via HACS as a custom repository, or by hand. See [install](docs/install.md), the
 
 ## Entities
 
-Each device the engine tracks becomes a Home Assistant device with three sensors:
+Each device the engine tracks becomes a Home Assistant device with three sensors and a presence tracker:
 
 | Entity | State | Attributes |
 |---|---|---|
 | `sensor.<device>_room` | the room, e.g. `Living Room` | `floor`, `confidence` (0–1), `x`, `y`, `z` (metres), `radius_m` (68 % radius), `verdict` (`CALL` or `LOW-CONF`), `near` (closest named furniture), `ha_area` (the matching Home Assistant area, if any) |
 | `sensor.<device>_floor` | the floor, e.g. `Main` | |
 | `sensor.<device>_location` | a sentence, e.g. `Near the ottoman in the Living Room` | |
+| `device_tracker.<device>` | `home`, or `not_home` once the device is away | |
+
+When a device hasn't been heard for 2 minutes it is **Away**: the room and floor sensors read `Away`, the room
+sensor keeps `last_seen`, `last_room` and `last_floor`, and the location reads like "Not detected since 6:12 AM,
+last in the Living Room". A quiet tag may not have left, so the sentence says only what is known. Removing a
+device in the engine deletes it from Home Assistant; a name you give a device in Home Assistant is never
+overwritten.
 
 Sensors write their state when the room or floor changes, and otherwise at most every 10 seconds, so your
-database doesn't fill with tiny position changes. If the engine stops tracking a device, its sensors become
-unavailable. Delete the device from its page if you no longer want it.
+database doesn't fill with tiny position changes. If the engine stops tracking a device without removing it,
+its entities become unavailable; you can delete it from its page.
 
 ### Ask your assistant
 

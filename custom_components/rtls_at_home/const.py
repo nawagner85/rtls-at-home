@@ -13,6 +13,9 @@ DEFAULT_POLL_INTERVAL = 0.49  # s: faster than twice the ~1 s rate a scanner ref
 DEFAULT_CENSUS_INTERVAL = 10.0  # s between nearby-device censuses
 CENSUS_WINDOW = 60.0  # s: a device heard within this counts as nearby
 CENSUS_MAX = 500  # devices per census, loudest first
+DETAIL_CENSUS_INTERVAL = 5.0  # s between censuses while the engine's onboarding panel is open
+DETAIL_WINDOW = 15.0  # s of each proxy's readings behind a detailed census row's median
+DETAIL_MAX = 2000  # addresses held for the detailed census
 DEDUPE_KEEP = 300.0  # s: forget (scanner, address) dedupe entries older than this
 STALE_AFTER = 30.0  # s without an engine reply before entities go unavailable
 BACKOFF_MIN = 0.5
@@ -21,3 +24,4 @@ WRITE_EVERY = 10.0  # s: most often a sensor writes state unless its room or flo
 PROTOCOL_VERSION = 1
 
 SIGNAL_UPDATE = "rtls_at_home_update_{}"  # .format(entry_id)
+SIGNAL_REMOVED = "rtls_at_home_removed_{}"  # .format(entry_id); payload: the removed device key

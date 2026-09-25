@@ -44,7 +44,7 @@ One batch per poll (about twice a second).
 | `adverts[][2]` rssi | int | dBm. |
 | `adverts[][3]` stamp | float | When the proxy's sighting arrived, in Home Assistant's monotonic clock. |
 | `scanners` | list | Every active scanner: `[source address, Home Assistant's name for it, seconds since its last advertisement]`. |
-| `census` | list | Optional, about every 10 s: devices heard in the last 60 s, loudest first, at most 500. Each entry has `keys`, `name` (may be null), `ibeacon`, `rssi` (best), `scanners` (how many heard it), `age` (seconds). |
+| `census` | list | Optional, about every 10 s: devices heard in the last 60 s, loudest first, at most 500. Each entry has `keys`, `name` (may be null), `ibeacon`, `rssi` (best), `scanners` (how many heard it), `age` (seconds). While the engine asks for detail (`census_detail` in the reply), the census comes every 5 s and each entry also has `per_scanner` (`[[scanner, median_rssi, samples], ...]` over the last 15 s), `first_seen` (Unix time this bridge first heard the address since it was last absent for 5 minutes, or null) and `addr_type` (`public`, `random_static`, `random_resolvable`, `random_nonresolvable`, or null when the scanner doesn't say). |
 
 **Clocks.** The engine converts a stamp to its own clock as
 `wall = sent_wall - (sent_mono - stamp)`, so the two machines' clocks never need to agree. A converted stamp later
@@ -58,8 +58,10 @@ than the engine's own "now" is clamped to now.
   "tracked": [
     {"key": "00:00:5e:00:53:0a", "name": "Keys", "room": "Living Room", "floor": "Main", "p_room": 0.8,
      "x": 5.2, "y": 2.1, "z": 3.8, "r68": 1.5, "verdict": "CALL", "age": 1.0,
-     "near": "ottoman", "description": "near the ottoman in the Living Room"}
-  ]
+     "near": "ottoman", "description": "near the ottoman in the Living Room", "status": "present",
+     "last_seen": 1790340000.5, "last_room": "Living Room", "last_floor": "Main"}
+  ],
+  "removed": ["00:00:5e:00:53:0b"]
 }
 ```
 
@@ -75,6 +77,14 @@ than the engine's own "now" is clamped to now.
 | `age` | Seconds since the device was last heard. |
 | `near` | Closest named furniture within 1 m on the same floor, or null. |
 | `description` | A sentence for voice assistants, or null. |
+| `status` | `present`, or `away` once the device hasn't been heard for 2 minutes (then `room`, `floor` and the position are null). |
+| `last_seen` | Wall-clock seconds (Unix time) of the device's last advert. |
+| `last_room`, `last_floor` | Where the device was last placed. |
+| `removed` | Keys removed from the engine on purpose in the last 7 days; the bridge deletes their devices. |
+| `census_detail` | `true` while someone has the engine's onboarding panel open: the bridge then sends a detailed census every 5 s. |
+
+`status`, `last_seen`, `last_room`, `last_floor`, `removed` and `census_detail` are optional: a bridge treats a missing `status` as
+present, and an older bridge ignores them.
 
 ### Errors
 
