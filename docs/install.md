@@ -4,6 +4,10 @@ You need Home Assistant 2026.9 or newer with the Bluetooth integration running, 
 
 ## With HACS (recommended)
 
+RTLS@Home is a HACS *custom repository*, not part of the HACS default list. HACS lists only projects under
+OSI-approved licences, and RTLS@Home's non-commercial licence can't be one (see
+[why](../README.md#why-rtlshome-isnt-free-to-sell)). Everything else works the same, including update notices.
+
 1. In HACS, open the menu (⋮) → **Custom repositories**.
 2. Add `https://github.com/nawagner85/rtls-at-home` with the type **Integration**.
 3. Find **RTLS@Home** in HACS and select **Download**.

@@ -33,4 +33,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          ignore: brands
+          # brands: no icon submitted yet. license: the HACS default list takes OSI-approved licences only, and a
+          # non-commercial licence can't be one, so RTLS@Home is installed as a custom repository (docs/install.md).
+          ignore: brands license
