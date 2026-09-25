@@ -1,0 +1,44 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your RTLS@Home engine",
+        "description": "The engine turns the Bluetooth sightings Home Assistant collects into rooms and positions. Enter its address and the ingest token you gave it.",
+        "data": {
+          "url": "Engine URL",
+          "token": "Ingest token"
+        },
+        "data_description": {
+          "url": "For example http://192.0.2.10:8765",
+          "token": "The shared secret the engine was started with (RTLS_INGEST_TOKEN)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Can't reach the engine at that address.",
+      "invalid_auth": "The engine rejected the token.",
+      "unsupported_version": "The engine speaks a different protocol version. Update RTLS@Home or the engine."
+    },
+    "abort": {
+      "already_configured": "This engine is already connected."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "RTLS@Home options",
+        "data": {
+          "poll_interval": "Bluetooth read interval (seconds)",
+          "census_interval": "Nearby-device list interval (seconds)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "room": { "name": "Room" },
+      "floor": { "name": "Floor" },
+      "location": { "name": "Location" }
+    }
+  }
+}
