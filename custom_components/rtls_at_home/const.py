@@ -25,3 +25,4 @@ PROTOCOL_VERSION = 1
 
 SIGNAL_UPDATE = "rtls_at_home_update_{}"  # .format(entry_id)
 SIGNAL_REMOVED = "rtls_at_home_removed_{}"  # .format(entry_id); payload: the removed device key
+SIGNAL_META = "rtls_at_home_meta_{}"  # .format(entry_id): a new meta from the engine

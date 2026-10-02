@@ -10,9 +10,9 @@ It uses the Bluetooth proxies you may already run for Home Assistant (ESPHome on
 your house turns their signal readings into positions: walls, floors, furniture, and each receiver's measured
 quirks.
 
-> **Status: alpha.** This repository holds the Home Assistant integration (the *bridge*). The positioning *engine*
-> it talks to is not public yet. It will be once its configuration (floor plans, receivers, calibration) is
-> separated from the author's own house. See [the roadmap](docs/architecture.md#roadmap).
+> **Status: alpha.** This repository holds the Home Assistant integration (the *bridge*) and the RTLS@Home **App**:
+> the positioning *engine* with its map editor, which runs on the same Home Assistant. See
+> [the roadmap](docs/architecture.md#roadmap).
 
 ## How it works
 
@@ -38,13 +38,18 @@ More detail: [architecture](docs/architecture.md), [the ingest protocol](docs/pr
 
 - Home Assistant 2026.9 or newer, with the Bluetooth integration running.
 - ESPHome Bluetooth proxies (ESP32 boards). Identical boards and antennas give the best results.
-- A running RTLS@Home engine and the ingest token it was started with.
+- The RTLS@Home App on the same Home Assistant (below), or an engine you run yourself and its ingest token.
 
 ## Install
 
-Via HACS as a custom repository, or by hand. See [install](docs/install.md), then add the integration under
-**Settings → Devices & services → Add integration → RTLS@Home**. The options are described in
-[configuration](docs/configuration.md).
+1. **The App (the engine).** In Home Assistant, **Settings → Apps → App store → ⋮ → Repositories**, add
+   `https://github.com/nawagner85/rtls-at-home`, then install **RTLS@Home** and start it. Its page opens on a map:
+   draw your floors and rooms and **Apply**; place the receivers Home Assistant hears and **Apply** again. Tracking
+   starts then, on a default model; once five spots are calibrated (**Setup → Calibrate**) it fits your house.
+2. **The integration (the bridge).** Via HACS as a custom repository, or by hand: see [install](docs/install.md).
+   Home Assistant discovers the App and connects to it in one click. Otherwise add it under **Settings → Devices &
+   services → Add integration → RTLS@Home**. The options are described in [configuration](docs/configuration.md).
+3. **Your devices.** In the App, **Setup → Onboard** lists the Bluetooth devices nearby; add the ones to track.
 
 ## Entities
 
@@ -56,6 +61,20 @@ Each device the engine tracks becomes a Home Assistant device with three sensors
 | `sensor.<device>_floor` | the floor, e.g. `Main` | |
 | `sensor.<device>_location` | a sentence, e.g. `Near the ottoman in the Living Room` | |
 | `device_tracker.<device>` | `home`, or `not_home` once the device is away | |
+
+`ha_area` is the Home Assistant area the engine's map links the room to, or the area with the room's name when the
+map leaves it unlinked.
+
+Besides the tracked devices:
+
+| Device | Entities |
+|---|---|
+| **<Area> presence**, one per Home Assistant area a map room links to, in that area | `binary_sensor` (occupancy): on while a tracked device is in any room linked to the area; `devices` and `count` attributes |
+| **RTLS@Home engine** | *Status* (`tracking` / `applying` / `setup`), *Receivers heard* (with `total`), *Devices present* |
+| **Each receiver**, connected via its ESPHome proxy's device when Home Assistant has one | *Heard* (connectivity), *Signal correction* (dB), *Placed in* (room, with `floor`) - diagnostic |
+
+Every device's *Visit* link opens the engine's page. **Download diagnostics** on the integration's page gathers what
+the bridge and the engine report, with the ingest token redacted.
 
 When a device hasn't been heard for 2 minutes it is **Away**: the room and floor sensors read `Away`, the room
 sensor keeps `last_seen`, `last_room` and `last_floor`, and the location reads like "Not detected since 6:12 AM,
@@ -72,8 +91,8 @@ its entities become unavailable; you can delete it from its page.
 Expose the location sensors to Assist (**Settings → Voice assistants → Expose**). An LLM conversation agent can
 then answer "Where is …?" from the sentence.
 
-Coming later: rooms linked to Home Assistant areas, named places that are not areas ("the bonus room closet"), and
-an Assist tool that can read the map itself.
+Coming later: named places that are not areas ("the bonus room closet"), and an Assist tool that can read the map
+itself.
 
 ## Privacy
 

@@ -32,3 +32,9 @@ def test_word_list_ignores_comments_and_blank_lines(tmp_path):
     f = tmp_path / "words.txt"
     f.write_text("# a comment\n\nalpha\n  beta  \n")
     assert scan.load_words(f) == ["alpha", "beta"]
+
+
+def test_a_package_version_pin_is_not_an_address():
+    """The App's Dockerfile pins opencv-python-headless==4.10.0.84: a version, dotted like an address."""
+    assert scan.findings_in("pip install opencv-python-headless==4.10.0.84 numpy~=1.26.4.1", []) == []
+    assert [f.kind for f in scan.findings_in("host=10.20.30.40", [])] == ["ipv4"]

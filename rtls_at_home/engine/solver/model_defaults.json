@@ -1,0 +1,37 @@
+{
+ "_note": "The default model (models.default_fit): a house with receivers and no calibration captures runs on it until its own fit. Physics terms and extras per model from the full fit of one house's data; one receiver level per kind (median); the spread of that house's residuals with every receiver at its kind's level. tools/make_model_defaults.py writes it.",
+ "levels": {
+  "echo": -61.079,
+  "esp32": -62.455
+ },
+ "models": {
+  "DominantPath": {
+   "gup": -6.392315,
+   "mad": 3.8636,
+   "p": {
+    "A": 19.322182,
+    "C": 0.56883,
+    "Hm": 0.0,
+    "SLAB": 2.677624,
+    "W4m": 6.341168,
+    "W5m": 59.999338,
+    "W6m": 19.999798,
+    "W7m": 25.762527,
+    "W8m": 120.0,
+    "Wat": 2.893993,
+    "gam": 0.0,
+    "n": 2.460737
+   },
+   "rms": 4.1781
+  },
+  "FreeSpace": {
+   "gup": -7.982767,
+   "mad": 4.0449,
+   "p": {
+    "SLAB": 2.203495,
+    "n": 2.739097
+   },
+   "rms": 4.3236
+  }
+ }
+}

@@ -45,6 +45,8 @@ One batch per poll (about twice a second).
 | `adverts[][3]` stamp | float | When the proxy's sighting arrived, in Home Assistant's monotonic clock. |
 | `scanners` | list | Every active scanner: `[source address, Home Assistant's name for it, seconds since its last advertisement]`. |
 | `census` | list | Optional, about every 10 s: devices heard in the last 60 s, loudest first, at most 500. Each entry has `keys`, `name` (may be null), `ibeacon`, `rssi` (best), `scanners` (how many heard it), `age` (seconds). While the engine asks for detail (`census_detail` in the reply), the census comes every 5 s and each entry also has `per_scanner` (`[[scanner, median_rssi, samples], ...]` over the last 15 s), `first_seen` (Unix time this bridge first heard the address since it was last absent for 5 minutes, or null) and `addr_type` (`public`, `random_static`, `random_resolvable`, `random_nonresolvable`, or null when the scanner doesn't say). |
+| `meta` | bool | Optional, `true` with each census (0.4.0): asks the engine for its meta in the reply. |
+| `places` | object | Optional, sent with each census (0.3.0): Home Assistant's floors and areas, `{"floors": [{"id", "name", "level"}], "areas": [{"id", "name", "floor"}]}` (`level` and `floor` may be null). The engine's map editor offers them as names for the floors and rooms of the house map. An engine that does not know the field ignores it. |
 
 **Clocks.** The engine converts a stamp to its own clock as
 `wall = sent_wall - (sent_mono - stamp)`, so the two machines' clocks never need to agree. A converted stamp later
@@ -82,8 +84,12 @@ than the engine's own "now" is clamped to now.
 | `last_room`, `last_floor` | Where the device was last placed. |
 | `removed` | Keys removed from the engine on purpose in the last 7 days; the bridge deletes their devices. |
 | `census_detail` | `true` while someone has the engine's onboarding panel open: the bridge then sends a detailed census every 5 s. |
+| `tracked[].room_id`, `floor_id` | The engine's map ids of the room and floor (null while away or unplaced). |
+| `tracked[].area` | The Home Assistant area the map links the room to, or null for a logical room. |
+| `meta` | Only when the batch asked for it: `{"engine": {"build", "status"}, "rooms": [{"id", "name", "floor_id", "floor", "area"}], "receivers": [{"name", "kind", "enabled", "alive", "room", "floor", "floor_name", "correction", "mac", "address"}]}`. `status` is `tracking`, `applying` while a new house is applied, or `setup` (with `build` null) until the house has rooms and a placed receiver; `correction` is the engine's live signal correction in dB; `mac` is an ESPHome proxy's Wi-Fi MAC and `address` the Bluetooth source Home Assistant reports, each null when the engine has none. |
 
-`status`, `last_seen`, `last_room`, `last_floor`, `removed` and `census_detail` are optional: a bridge treats a missing `status` as
+`status`, `last_seen`, `last_room`, `last_floor`, `removed`, `census_detail`, `room_id`, `floor_id`, `area` and
+`meta` are optional: a bridge treats a missing `status` as
 present, and an older bridge ignores them.
 
 ### Errors

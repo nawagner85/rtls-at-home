@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>House RTLS</title>
+<style>
+  :root { --bg:#0f141b; --panel:#161d27ee; --line:#2a3544; --ink:#e6edf5; --dim:#8b98a9; --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b;
+          --fs:#f97316; --dp:#d946ef; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font:13px/1.4 "IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif; overflow:hidden; font-variant-numeric:tabular-nums; }
+  #view { position:fixed; inset:0; }
+  #labels { position:fixed; inset:0; pointer-events:none; }
+  .lbl { font-size:10px; color:#cbd5e1; background:#0b0f15aa; padding:1px 4px; border-radius:3px; white-space:nowrap; }
+  .lbl.room { color:#e2e8f0; background:transparent; text-shadow:0 0 3px #000, 0 0 3px #000; }
+  .lbl.dead { color:#fecaca; background:#7f1d1dcc; }
+  .lbl.rxoff { color:#9ca3af; background:#1f2937cc; text-decoration:line-through; }
+  #status { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:4px 0 6px; }
+  #status .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .pill { padding:1px 7px; border-radius:99px; font-size:11px; border:1px solid var(--line); }
+  #status .start { margin:2px 0 4px; padding:9px 11px; border-left:3px solid var(--ok); border-radius:4px; background:#22c55e14; font-size:14px; }
+  .live { background:#14532d; border-color:#166534; } .stale { background:#78350f; border-color:#92400e; } .off { background:#7f1d1d; border-color:#991b1b; }
+  .pill.gray { background:#374151; border-color:#4b5563; }
+  #rxList { width:100%; border-collapse:collapse; } #rxList td { padding:5px 4px; border-top:1px solid var(--line); vertical-align:top; }
+  #rxList tr.rxoff td:nth-child(n+2) { opacity:.55; } #rxList input[type=checkbox] { width:18px; height:18px; }
+  .big { font-size:15px; font-weight:600; }
+  .fs { color:var(--fs); } .dp { color:var(--dp); }
+  #panel { position:fixed; right:10px; top:10px; bottom:10px; width:460px; background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; overflow:auto; padding:12px 14px; z-index:4; }
+  #panel h3 { margin:16px 0 6px; font-size:12px; font-weight:600; color:var(--dim); display:flex; align-items:center; justify-content:space-between; }
+  #panel h3 button { font-size:12px; padding:3px 8px; }
+  #modes button, #setupTabs button { padding:7px 12px; }
+  #setupTabs { margin:6px 0 2px; }
+  [data-flag] { display:none; }                       /* experiments: shown only when their FLAG is on */
+  /* the device list */
+  .dev { display:grid; grid-template-columns:14px 1fr auto; gap:0 10px; align-items:start; padding:9px 6px; border-bottom:1px solid var(--line); cursor:pointer; border-radius:6px; }
+  .dev:hover { background:#1e293b66; } .dev.focus { background:#1e3a5f66; }
+  .dev .dot { width:10px; height:10px; margin:6px 0 0; }
+  .dev .line { display:flex; justify-content:space-between; gap:12px; font-size:15px; font-weight:500; }
+  .dev .where { text-align:right; font-weight:400; white-space:nowrap; }
+  .dev .detail { color:var(--dim); text-align:right; font-size:12px; margin-top:1px; }
+  .dev.dim .line, .dev.dim .detail { opacity:.5; }
+  .dev .act { display:flex; gap:2px; opacity:.45; } .dev:hover .act, .dev.focus .act { opacity:1; }
+  .dev .act button { padding:2px 6px; font-size:12px; border-color:transparent; background:transparent; }
+  .dev .act button:hover { border-color:var(--line); background:#1f2937; }
+  .dev.edit { cursor:default; grid-template-columns:1fr; }
+  .dev.edit input[type=text] { width:100%; background:#1f2937; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; font-size:14px; }
+  .seg button { border-radius:0; } .seg button:first-child { border-radius:7px 0 0 7px; } .seg button:last-child { border-radius:0 7px 7px 0; }
+  .seg { display:inline-flex; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  td,th { padding:3px 4px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  th { color:var(--dim); font-weight:500; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .ctl { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; align-items:center; }
+  button, select { background:#1f2937; color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:6px 9px; font:inherit; }
+  button.on { background:#1e3a5f; border-color:#3b82f6; }
+  button.primary { background:#14532d; border-color:#22c55e; font-weight:600; }
+  button.armed { background:#7c2d12; border-color:#f97316; }
+  label { display:inline-flex; align-items:center; gap:4px; color:var(--dim); }
+  input[type=range] { width:130px; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+  .muted { color:var(--dim); }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#14532d; border:1px solid #22c55e; padding:8px 14px;
+           border-radius:8px; display:none; z-index:9; }
+  #handle { display:none; }
+  .calcard { border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:6px 0; }
+  .v-green { color:var(--ok); } .v-amber { color:var(--warn); } .v-red { color:var(--bad); }
+  #calPanel input[type=number], #calPanel input[type=text] { width:64px; background:#1f2937; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:4px; font:inherit; }
+  #calPanel input.note { width:130px; }
+  #calPanel button.sel { background:#1e3a5f; border-color:#60a5fa; }
+  .nudge { display:grid; grid-template-columns:repeat(3, 38px); gap:4px; }
+  .nudge button { padding:6px 0; }
+  .lbl.dev { font-size:11px; font-weight:600; color:#0b0f15; }
+  .others { margin-top:3px; font-size:12px; }
+  #onbList tr.hl td { background:#1e3a5f88; } #onbList td { padding:3px 4px; vertical-align:top; }
+  .lbl.onb { font-size:11px; font-weight:700; background:#e5e7eb; color:#0b0f15; border-radius:8px; padding:0 5px; }
+  .lbl.onb.hl { background:#facc15; }
+  .lbl.out { font-size:10px; font-weight:700; background:#facc15; color:#0b0f15; border-radius:6px; padding:0 4px; }
+  .lbl.out.hl { background:#fff; }
+  #plan { position:fixed; inset:0; display:none; background:#0b0f15; } #plan canvas { width:100%; height:100%; display:block; }
+  #outPanel .box { border:1px solid #334155; border-radius:6px; padding:6px; margin:6px 0; }
+  #outList { width:100%; border-collapse:collapse; margin-top:6px; } #outList tr { cursor:pointer; }
+  #outList td { padding:3px 4px; vertical-align:top; } #outList tr.hl td { background:#1e3a5f88; }
+  #outNote { width:70%; }
+  /* the placement advisor (advisor.js), under the outlets */
+  #advisorPanel { border-top:1px solid var(--line); margin-top:10px; padding-top:4px; }
+  #advisorPanel .box { border:1px solid #334155; border-radius:6px; padding:6px; margin:6px 0; }
+  #advN { width:4.5em; } .advFixed { display:flex; flex-direction:column; gap:2px; margin:4px 0 6px; }
+  .advFixed label { cursor:pointer; } .advProg { margin:6px 0; color:var(--ink); }
+  #advisorPanel table { border-collapse:collapse; margin:6px 0; } #advisorPanel td, #advisorPanel th { padding:2px 8px 2px 0; text-align:left; }
+  .advScore tr.sug td { color:#67e8f9; font-weight:600; }
+  .advScore tr.mine td { color:#fde68a; font-weight:600; } #advMoves tr.off td { color:var(--dim); }
+  #advMoves tr[data-out]:not([data-out=""]) { cursor:pointer; } #advMoves tr.unplug td { color:var(--dim); }
+  #advisorPanel .warn { color:#fde68a; margin-bottom:4px; } #advisorPanel .bad { color:#fecaca; }
+  .sugmark { color:#22d3ee; margin-left:3px; }
+  .lbl.sug { font-size:11px; font-weight:700; background:#22d3ee; color:#0b0f15; border-radius:6px; padding:0 5px; }
+  /* the map editor (map.js) */
+  #mapEditor { position:fixed; left:0; top:0; bottom:0; right:480px; z-index:3; background:var(--bg); display:grid;
+               grid-template-columns:70px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
+  #mapTop { grid-column:1 / 3; display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #mapTop button { padding:5px 9px; } #mapTop button:disabled { opacity:.4; cursor:default; }
+  #mapSave { margin-left:auto; cursor:pointer; } #mapSave.bad { color:#fecaca; }
+  #mapProbs.bad { border-color:var(--bad); color:#fecaca; } #mapProbs.warn { border-color:var(--warn); color:#fde68a; }
+  #mapTools { display:flex; flex-direction:column; gap:4px; padding:8px 6px; border-right:1px solid var(--line); overflow:auto; }
+  #mapTools button { padding:5px 2px; display:flex; flex-direction:column; align-items:center; font-weight:600; line-height:1.15; }
+  #mapTools button small { font-weight:400; font-size:10px; color:var(--dim); }
+  #mapTools button:disabled { opacity:.35; }
+  #mapStage { position:relative; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  #mapSvg { flex:1; width:100%; min-height:0; display:block; touch-action:none; user-select:none; }
+  #mapHint { position:absolute; left:10px; top:8px; pointer-events:none; text-shadow:0 0 3px #000; }
+  #mapPreview { height:42%; min-height:160px; border-top:1px solid var(--line); }
+  #mapSvg .wall { stroke-linecap:round; } #mapSvg .wall.ext { stroke:#e2e8f0; stroke-width:4; }
+  #mapSvg .wall.int { stroke:#94a3b8; stroke-width:2; } #mapSvg .wall.out { stroke:#4ade8088; stroke-width:1; stroke-dasharray:4 4; }
+  #mapSvg .open { stroke:#22c55e; stroke-width:3; stroke-dasharray:6 4; } #mapSvg .open.sel { stroke:#60a5fa; stroke-width:5; }
+  #mapSvg .cut { stroke:var(--bg); stroke-width:6; }
+  #mapSvg .ap { fill:none; stroke-width:2; } #mapSvg .ap.door { stroke:#f59e0b; } #mapSvg .ap.arc { stroke:#f59e0b; stroke-width:1; stroke-dasharray:3 3; }
+  #mapSvg .ap.window { stroke:#38bdf8; stroke-width:1.5; } #mapSvg .ap.garage { stroke:#f97316; stroke-width:3; stroke-dasharray:8 4; }
+  #mapSvg .ap.opening { stroke:#22c55e; } #mapSvg .ap.sel { stroke:#60a5fa; stroke-width:3; }
+  #mapSvg .below { fill:none; stroke:#64748b; stroke-width:1; stroke-dasharray:3 4; }
+  #mapSvg .grid { stroke:#1a2330; stroke-width:1; }
+  #mapSvg .tread { stroke:#f59e0b55; stroke-width:1; } #mapSvg .stair { stroke:#f59e0b; stroke-width:2; }
+  #mapSvg .h { fill:#0f141b; stroke:#60a5fa; stroke-width:1.5; }
+  #mapSvg .rx { fill:#22d3ee; stroke:#0e7490; stroke-width:1.5; } #mapSvg .rx.echo { fill:#c4b5fd; stroke:#6d28d9; }
+  #mapSvg .rx.off { fill:none; } #mapSvg .rx.sel { stroke:#fff; stroke-width:2.5; } #mapSvg .rx.ghost { fill:none; stroke-dasharray:3 2; }
+  #mapSvg text.rxname { fill:#a5f3fc; }
+  #mapSvg .tool { fill:#60a5fa22; stroke:#60a5fa; stroke-width:1.5; stroke-dasharray:5 3; } #mapSvg .hot { stroke:#facc15; stroke-width:5; }
+  #mapSvg text { font:12px "IBM Plex Sans",system-ui,sans-serif; fill:#e2e8f0; paint-order:stroke; stroke:#0f141b; stroke-width:3px;
+                 text-anchor:middle; pointer-events:none; }
+  #mapSvg text.rname { font-weight:600; } #mapSvg text.small { font-size:10px; fill:#aab6c5; } #mapSvg text.tlabel { font-size:12px; fill:#facc15; }
+  #mapPanel .mrow { display:grid; grid-template-columns:120px minmax(0,1fr); gap:4px 8px; align-items:center; margin:5px 0; }
+  #mapPanel input, #mapPanel select { width:100%; background:#1f2937; color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
+  #mapPanel input.bad { border-color:var(--bad); } #mapPanel .bad { color:#fecaca; }
+  #mapPanel input[type=range] { padding:0; } #mapPanel input[type=checkbox] { width:auto; vertical-align:middle; }
+  #mapPreview .mpbar { position:absolute; left:8px; right:8px; top:6px; display:flex; justify-content:space-between; gap:8px;
+                       pointer-events:none; text-shadow:0 0 3px #000; color:var(--dim); font-size:12px; }
+  #mapPreview .mpbar label { pointer-events:auto; } #mapPreview .mpbar input { width:110px; }
+  #mapPanel .mhint { font-size:11px; margin-top:2px; }
+  #mapPanel .mapply { list-style:none; padding:0; margin:8px 0; } #mapPanel .mapply li { padding:4px 0; }
+  #mapPanel .mapply li span { display:inline-block; width:18px; } #mapPanel .mapply li.done { color:var(--ok); }
+  #mapPanel .mapply li.running { color:var(--ink); font-weight:600; } #mapPanel .mapply li.waiting { color:var(--dim); }
+  #mapPanel .mapply li.failed { color:#fecaca; } #mapPanel .mapply li.skipped { color:var(--dim); }
+  #mapPanel .mhist { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 0; border-top:1px solid var(--line); }
+  #mapPanel .mprob { padding:5px 6px; border-radius:6px; cursor:pointer; } #mapPanel .mprob:hover { background:#1e293b; }
+  #mapPanel .mprob.error { color:#fecaca; } #mapPanel .mprob.warning { color:#fde68a; }
+  @media (max-width: 760px) {
+    #mapEditor { right:0; bottom:46vh; grid-template-columns:minmax(0,1fr); }
+    #mapTools, #mapTop .edit { display:none; } #mapTop { grid-column:1; }
+  }
+  @media (max-width: 760px) {
+    #panel { left:0; right:0; top:auto; bottom:0; width:auto; height:46vh; border-radius:12px 12px 0 0; }
+    #panel.min { height:44px; overflow:hidden; }
+    #handle { display:block; text-align:center; color:var(--dim); padding:2px 0 8px; cursor:pointer; }
+  }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./static/vendor/three/three.module.js",
+               "three/addons/": "./static/vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="labels"></div>
+<div id="plan"><canvas id="planCanvas"></canvas></div>
+<div id="mapEditor" style="display:none"></div>
+<div id="panel">
+  <div id="handle">▾ details</div>
+  <div class="ctl" id="modes"><button id="mTrack" class="on">Track</button><button id="mSetup">Setup</button></div>
+  <div class="ctl" id="setupTabs" style="display:none"><button id="mMap">Map</button><button id="mOut">Outlets</button><button id="mCal">Calibrate</button><button id="mOnb">Onboard</button><button id="mRx">Receivers</button></div>
+  <div class="ctl" id="mapBar" style="display:none"><button id="camPlan">2-D plan</button><span class="muted">plan view and outlets</span></div>
+  <div id="status"><span class="muted">connecting…</span></div>
+  <div id="calPanel" style="display:none"></div>
+  <div id="onbPanel" style="display:none"></div>
+  <div id="outPanel" style="display:none"></div>
+  <div id="advisorPanel" style="display:none"></div>
+  <div id="rxPanel" style="display:none"></div>
+  <div id="mapPanel" style="display:none"></div>
+  <div id="trackPanel">
+  <h3>Devices <button id="showAll" style="display:none">Show all</button></h3>
+  <div id="devList"></div>
+
+  <div data-flag="models">
+  <h3>Where the models think <span id="focusName">you are</span></h3>
+  <table id="est"></table>
+  </div>
+  <div id="bermuda" class="muted" style="margin-top:6px" data-flag="bermuda"></div>
+
+  <div data-flag="groundTruth">
+  <h3>Ground truth</h3>
+  <div class="ctl">
+    <button id="btnHere" class="primary">📍 I'm here — tap the map</button>
+  </div>
+  <div class="ctl">
+    <select id="roomSel"></select><button id="btnRoom">Label room</button>
+  </div>
+  <div id="truths" class="muted"></div>
+  </div>
+
+  <h3>View</h3>
+  <div data-flag="models">
+  <div class="ctl" id="modelBtns"></div>
+  <div class="ctl">
+    <label>heat <select id="heatSel"><option>DominantPath</option><option>FreeSpace</option><option value="">off</option></select></label>
+    <button id="tTrail" class="on">trail</button>
+    <button id="tFilter" class="on">room filter</button><button id="tConf">confidence</button>
+  </div>
+  </div>
+  <div class="ctl" id="floorBtns"></div>
+  <div class="ctl"><button id="tFix" class="on">furniture</button><button id="tLabels" class="on">labels</button><button id="tCut" class="on">cutaway walls</button>
+    <button id="camIso">3-D</button><button id="camTop">top</button></div>
+  <div class="ctl"><label>explode <input id="explode" type="range" min="1" max="3" step="0.1" value="1.6"></label></div>
+
+  <div data-flag="signal">
+  <h3>Signal</h3>
+  <div class="ctl"><label>half-life <input id="half" type="range" min="3" max="60" step="1" value="15"><span id="halfV">15 s</span></label></div>
+  <div class="ctl"><label>signal filter <select id="estSel"></select></label>
+    <button id="tMotion">motion filter</button></div>
+  <div class="ctl"><button id="btnReset">reset filter (focus device)</button></div>
+  <table id="scan"></table>
+  </div>
+
+  <div data-flag="session">
+  <h3>Session</h3>
+  <div id="sess" class="muted"></div>
+  </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { initCalib } from './static/calib.js';
+import { initOnboard } from './static/onboard.js';
+import { initOutlets } from './static/outlets.js';
+import { initAdvisor } from './static/advisor.js';
+import { initReceivers } from './static/receivers.js';
+import { initMap } from './static/map.js';
+import { FLAGS, toggleHidden, visibleKeys, rowModel, loadHidden, saveHidden, deviceStatus } from './static/track_logic.js';
+import { wallMeshes as wallMeshes3d, fixtureMesh, rampMesh, wellOutline, drawPlan, fixtureAt } from './static/geometry.js';
+import { floorColor, houseCentre } from './static/geometry_logic.js';   // any number of floors (house.json)
+
+const $ = (id) => document.getElementById(id);
+const MODEL_COLOR = { FreeSpace: 0xf97316, DominantPath: 0xd946ef };
+const VOX = { 4: { c: 0x94a3b8, wall: true }, 5: { c: 0x64748b, wall: true }, 6: { c: 0x7dd3fc, wall: true },
+              7: { c: 0xa0522d, h: 0.06 }, 8: { c: 0x7d3c98, h: 0.3 } };
+const FIX = { low: 0xc8b89a, med: 0xb08968, high: 0x7a8fa6, none: 0x999999 };
+
+let house, state, explode = 1.6;
+const show = { heat: !!FLAGS.heat, heatModel: FLAGS.heat || 'DominantPath', trail: FLAGS.trail, filter: FLAGS.roomFilter, fix: true, labels: true, cut: true, conf: FLAGS.confidence,
+               models: new Set(FLAGS.models ? ['FreeSpace', 'DominantPath'] : [FLAGS.heat || 'DominantPath']), floors: new Set([0, 1, 2]) };
+// the production panel (Nick 2026-09-26): experiments stay in the code behind FLAGS; devices can be hidden on the map
+// (this browser only) or isolated - the map shows one device and flies to it
+document.querySelectorAll('[data-flag]').forEach(el => { if (FLAGS[el.dataset.flag]) el.style.display = ''; });
+let hidden = loadHidden(localStorage), isolate = null;
+let labelMode = false;
+let calMode = false, calib = null, mode = 'track', onboard = null, outlets = null, receivers = null, map = null, advisor = null;           // Calibrate tab (calib.js)
+
+// ---------- three setup ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });   // walls are merged boxes; the log depth keeps the remaining seams from z-fighting
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+$('view').appendChild(renderer.domElement);
+const css = new CSS2DRenderer({ element: $('labels') });
+css.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f141b);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(5, 20, 8); scene.add(sun);
+// On a phone the details sheet covers the bottom ~46%, so render the scene shifted up into the
+// visible part, and stand further back because a narrow screen crops the house.
+const narrow = () => innerWidth <= 760;
+function frame() {
+  camera.aspect = innerWidth / innerHeight;
+  if (narrow()) camera.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.22, innerWidth, innerHeight);
+  else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', frame); frame();
+
+const floorGroups = [], roomMeshes = [], roomByKey = {}, wallMeshes = [], fixtureMeshes = [], labelObjs = [];
+const scannerObjs = {};
+const base = (fi) => house.floors[fi].z * explode;
+const P = (fi, x, y, h = 0) => new THREE.Vector3(x, base(fi) + h, -y);
+
+function label(text, cls = '', floor = null) {
+  const d = document.createElement('div'); d.className = 'lbl ' + cls; d.textContent = text;
+  const o = new CSS2DObject(d); o.userData.floor = floor; labelObjs.push(o); return o;
+}
+// CSS labels are never occluded, so labels from every floor pile on top of each other.
+// Show them only for the focused floor: the one visible floor, else where the lead model puts you.
+function focusFloor() {
+  if (show.floors.size === 1) return [...show.floors][0];
+  const e = state?.estimates?.[show.heatModel] || state?.estimates?.DominantPath || state?.estimates?.FreeSpace;
+  return e?.map_floor ?? 1;
+}
+function applyLabels() {
+  const f = focusFloor();
+  labelObjs.forEach(o => { o.visible = show.labels && show.floors.has(o.userData.floor) && o.userData.floor === f; });
+}
+
+function buildHouse() {
+  const res = house.res;
+  house.floors.forEach((f, fi) => {
+    const g = new THREE.Group(); g.userData.floor = fi; scene.add(g); floorGroups.push(g);
+    // rooms
+    house.rooms.filter(r => r.floor === fi).forEach(r => {
+      const sh = new THREE.Shape(r.points.map(p => new THREE.Vector2(p[0], p[1])));
+      const geo = new THREE.ShapeGeometry(sh); geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshBasicMaterial({ color: floorColor(fi), transparent: true, opacity: r.outdoor ? 0.08 : 0.18,
+                                                side: THREE.DoubleSide, depthWrite: false });
+      const m = new THREE.Mesh(geo, mat); m.userData = { floor: fi, room: r.name, baseOpacity: mat.opacity, points: r.points };
+      g.add(m); roomMeshes.push(m); roomByKey[fi + '|' + r.name] = m;
+      const L = label(r.name, 'room', fi); L.position.set(r.centroid[0], 0.05, -r.centroid[1]); g.add(L);
+    });
+    // walls in bands at their windows' sills and heads, from the same raster the model uses (geometry.js)
+    for (const im of wallMeshes3d(THREE, f, house.voxels[fi], (house.bands || [])[fi], res)) { im.userData.fi = fi; g.add(im); wallMeshes.push(im); }
+    // furniture from its z_min to its top
+    house.fixtures.filter(x => x.floor === fi && x.height > 0 && x.rf !== 'none').forEach(x => { const m = fixtureMesh(THREE, x); g.add(m); fixtureMeshes.push(m); });
+    // stairs: each flight on its lower floor at true pitch (exploded, its top hangs in the gap), the well outlined above
+    (house.ramps || []).filter(r => r.lower === fi).forEach(r => { const m = rampMesh(THREE, r); g.add(m); fixtureMeshes.push(m); });
+    (house.ramps || []).filter(r => r.lower + 1 === fi).forEach(r => g.add(wellOutline(THREE, r)));
+  });
+  // scanners and WAP beacons
+  house.scanners.forEach(s => {
+    const fi = s.floor, zr = s.z_abs - house.floors[fi].z;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 12),
+                             new THREE.MeshLambertMaterial({ color: s.kind === 'echo' ? 0x06b6d4 : 0x22c55e }));
+    m.position.set(s.x, zr, -s.y); floorGroups[fi].add(m);
+    const L = label(s.name.replace(' Echo Show 8', ' Echo').replace(' Echo Show 5', ' Show').replace(' Show 5', ' Show'), '', fi);
+    L.position.set(0, 0.3, 0); m.add(L);
+    scannerObjs[s.name] = { mesh: m, label: L };
+  });
+  house.waps.forEach(w => {
+    const fi = w.floor, zr = w.z_abs - house.floors[fi].z;
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), new THREE.MeshLambertMaterial({ color: 0xa855f7 }));
+    m.position.set(w.x, zr, -w.y); floorGroups[fi].add(m);
+  });
+  applyWalls(); applyExplode();
+}
+
+function applyWalls() {
+  wallMeshes.forEach(m => {
+    const b = m.userData.band;                          // a band mesh: its geometry already spans band.from..band.to
+    m.visible = !(show.cut && b && b.from >= 1.1);       // cutaway: hide everything above 1.1 m, squash what straddles it
+    m.scale.y = (show.cut && b && b.from < 1.1 && b.to > 1.1) ? 1.1 / b.to : 1;
+  });
+}
+function applyExplode() {
+  if (typeof planOn !== 'undefined' && planOn) renderPlan();
+  floorGroups.forEach((g, fi) => { g.position.y = base(fi); g.visible = show.floors.has(fi); });
+  applyLabels();
+  if (state?.estimates) renderState();
+}
+
+// ---------- dynamic layers ----------
+const heat = {}, marker = {}, trail = {};
+const HEAT_MAX = 900;
+for (const m of Object.keys(MODEL_COLOR)) {
+  const geo = new THREE.PlaneGeometry(0.23, 0.23); geo.rotateX(-Math.PI / 2);
+  const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.75, depthWrite: false }), HEAT_MAX);
+  im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(HEAT_MAX * 3), 3);
+  im.count = 0; im.frustumCulled = false; scene.add(im); heat[m] = im;
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 14), new THREE.MeshLambertMaterial({ color: MODEL_COLOR[m], emissive: MODEL_COLOR[m], emissiveIntensity: 0.4 }));
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 6), new THREE.MeshBasicMaterial({ color: MODEL_COLOR[m] }));
+  const conf = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16),
+                              new THREE.MeshBasicMaterial({ color: MODEL_COLOR[m], transparent: true, opacity: 0.13, depthWrite: false }));
+  s.visible = stick.visible = conf.visible = false; scene.add(s); scene.add(stick); scene.add(conf); marker[m] = { s, stick, conf };
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(60 * 3), 3));
+  const tl = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: MODEL_COLOR[m], transparent: true, opacity: 0.7 }));
+  tl.frustumCulled = false; scene.add(tl); trail[m] = tl;
+}
+// ---- extra tracked devices: one marker + name + trail each, coloured per device ----
+const DEV_COLORS = [0x22d3ee, 0xa3e635, 0xfacc15, 0x60a5fa, 0xf472b6, 0x34d399, 0xc084fc, 0xfb7185, 0x2dd4bf, 0xfdba74];
+const shortName = (label) => String(label ?? '').replace(/\s*\(.*\)\s*$/, '') || String(label ?? '');
+function devColor(key) {
+  const keys = Object.keys(state?.devices || house?.devices || {}), i = Math.max(0, keys.indexOf(key));
+  return DEV_COLORS[i % DEV_COLORS.length];
+}
+const hex = (c) => '#' + c.toString(16).padStart(6, '0');
+const devMarkers = {};
+function devMarker(key, label) {
+  if (devMarkers[key]) return devMarkers[key];
+  const c = devColor(key);
+  const s = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12), new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.5 }));
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1, 6), new THREE.MeshBasicMaterial({ color: c }));
+  const d = document.createElement('div'); d.className = 'lbl dev'; d.textContent = shortName(label); d.style.background = hex(c);
+  const lbl = new CSS2DObject(d);
+  const tg = new THREE.BufferGeometry(); tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(60 * 3), 3));
+  const trailLine = new THREE.Line(tg, new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.7 }));
+  trailLine.frustumCulled = false;
+  [s, stick, lbl, trailLine].forEach(o => { o.visible = false; scene.add(o); });
+  return (devMarkers[key] = { s, stick, lbl, trail: trailLine });
+}
+function hideDevMarker(mk) { mk.s.visible = mk.stick.visible = mk.lbl.visible = false; mk.trail.geometry.setDrawRange(0, 0); }
+function renderDevices() {
+  const rows = (state.tracked || []).filter(r => !r.focus), live = new Set(rows.map(r => r.key));
+  const shown = new Set(visibleKeys(rows.map(r => r.key), hidden, isolate));
+  Object.entries(devMarkers).forEach(([k, mk]) => { if (!live.has(k)) hideDevMarker(mk); });
+  for (const r of rows) {
+    const mk = devMarker(r.key, r.label), e = r.est;
+    if (mode !== 'track' || !shown.has(r.key) || !e || !e.xy || !show.floors.has(e.map_floor)) { hideDevMarker(mk); continue; }
+    const xy = e.display_xy || e.xy, p = P(e.map_floor, xy[0], xy[1], 1.0);
+    mk.s.position.copy(p); mk.stick.position.set(p.x, base(e.map_floor) + 0.5, p.z);
+    mk.lbl.position.set(p.x, p.y + 0.45, p.z);
+    mk.s.visible = mk.stick.visible = true; mk.lbl.visible = show.labels;
+    const arr = mk.trail.geometry.attributes.position.array; let n = 0;
+    if (show.trail) (r.trail || []).forEach(t => { if (show.floors.has(t[1])) { const v = P(t[1], t[2], t[3], 1.0); arr[3*n] = v.x; arr[3*n+1] = v.y; arr[3*n+2] = v.z; n++; } });
+    mk.trail.geometry.setDrawRange(0, n); mk.trail.geometry.attributes.position.needsUpdate = true;
+  }
+}
+const truthGroup = new THREE.Group(); scene.add(truthGroup);
+
+function heatColor(t) {             // t in 0..1 -> dark purple .. orange .. yellow
+  t = Math.sqrt(Math.max(0, Math.min(1, t)));
+  return new THREE.Color().setRGB(0.25 + 0.75 * t, 0.05 + 0.85 * t * t, 0.35 * (1 - t) + 0.1);
+}
+
+function renderState() {
+  if (planOn) renderPlan();
+  const est = state.estimates || {};
+  const focusKey = state.cfg?.device, focusShown = visibleKeys([focusKey], hidden, isolate).length > 0;
+  for (const m of Object.keys(MODEL_COLOR)) {
+    const e = est[m], on = focusShown && show.models.has(m) && e && e.xy;
+    // heat
+    const im = heat[m];
+    if (on && show.heat && m === show.heatModel && e.heat) {
+      const pts = e.heat.filter(h => show.floors.has(h[0]));
+      const pmax = Math.max(...pts.map(h => h[3]), 1e-9);
+      const m4 = new THREE.Matrix4();
+      pts.slice(0, HEAT_MAX).forEach((h, i) => {
+        m4.makeTranslation(h[1], base(h[0]) + 0.03 + (m === 'DominantPath' ? 0.01 : 0), -h[2]);
+        im.setMatrixAt(i, m4); im.setColorAt(i, heatColor(h[3] / pmax));
+      });
+      im.count = Math.min(pts.length, HEAT_MAX); im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true;
+    } else im.count = 0;
+    // marker at the most likely cell
+    const mk = marker[m];
+    if (on && show.floors.has(e.map_floor)) {
+      const xy = e.display_xy || e.xy;                       // jitter-filtered position
+      const p = P(e.map_floor, xy[0], xy[1], 1.0);
+      mk.s.position.copy(p); mk.stick.position.set(p.x, base(e.map_floor) + 0.5, p.z); mk.stick.scale.y = 1.0;
+      mk.conf.position.copy(p); mk.conf.scale.setScalar(Math.max(0.3, e.sphere_r || e.r68 || 1));
+      mk.s.visible = mk.stick.visible = true; mk.conf.visible = show.conf;
+    } else mk.s.visible = mk.stick.visible = mk.conf.visible = false;
+    // trail
+    const tr = state.tracks?.[m] || [], arr = trail[m].geometry.attributes.position.array;
+    let n = 0;
+    if (on && show.trail) tr.forEach(t => { if (show.floors.has(t[1])) { const v = P(t[1], t[2], t[3], 1.0); arr[3*n] = v.x; arr[3*n+1] = v.y; arr[3*n+2] = v.z; n++; } });
+    trail[m].geometry.setDrawRange(0, n); trail[m].geometry.attributes.position.needsUpdate = true;
+  }
+  // room highlight from the filtered belief of the first visible model
+  roomMeshes.forEach(r => { r.material.opacity = r.userData.baseOpacity; r.material.color.setHex(floorColor(r.userData.floor)); });
+  const lead = [...show.models].find(m => est[m]?.filtered);
+  if (show.filter && lead) {
+    const f = est[lead].filtered[0], r = roomByKey[f.floor + '|' + f.room];
+    if (r) { r.material.opacity = 0.2 + 0.45 * f.p; r.material.color.setHex(MODEL_COLOR[lead]); }
+  }
+  // truth markers
+  truthGroup.clear();
+  (state.truths || []).slice(-8).forEach((t, i, a) => {
+    if (t.x == null || !show.floors.has(t.floor)) return;
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.4, 12),
+                             new THREE.MeshBasicMaterial({ color: 0x22c55e, transparent: true, opacity: 0.35 + 0.65 * (i + 1) / a.length }));
+    c.position.copy(P(t.floor, t.x, t.y, 0.7)); truthGroup.add(c);
+  });
+  applyLabels();
+  renderDevices();
+  if (mode !== 'track') hideTracking();
+  // scanner health
+  for (const [name, o] of Object.entries(scannerObjs)) {
+    const dead = (state.dead || []).includes(name), off = (state.disabled || []).includes(name);   // off: switched off in Setup
+    o.mesh.material.color.setHex(off ? 0x6b7280 : dead ? 0xef4444 : (name.includes('Show') ? 0x06b6d4 : 0x22c55e));
+    o.label.element.className = 'lbl' + (off ? ' rxoff' : dead ? ' dead' : '');
+    if (dead) o.label.visible = show.labels && show.floors.has(o.label.userData.floor);   // a dead scanner always shows
+  }
+}
+
+function hideTracking() {
+  for (const m of Object.keys(MODEL_COLOR)) {
+    heat[m].count = 0; marker[m].s.visible = marker[m].stick.visible = marker[m].conf.visible = false;
+    trail[m].geometry.setDrawRange(0, 0);
+  }
+  truthGroup.clear();
+  Object.values(devMarkers).forEach(hideDevMarker);
+  roomMeshes.forEach(r => { r.material.opacity = r.userData.baseOpacity; r.material.color.setHex(floorColor(r.userData.floor)); });
+}
+let lastSetup = 'map';
+function setMode(m) {
+  mode = m; calMode = m === 'cal';
+  const setup = m !== 'track'; if (setup) lastSetup = m;
+  $('mTrack').classList.toggle('on', !setup); $('mSetup').classList.toggle('on', setup);
+  $('setupTabs').style.display = setup ? '' : 'none'; $('mapBar').style.display = m === 'outlets' ? '' : 'none';
+  $('mCal').classList.toggle('on', m === 'cal'); $('mOnb').classList.toggle('on', m === 'onboard'); $('mOut').classList.toggle('on', m === 'outlets');
+  $('mRx').classList.toggle('on', m === 'receivers'); $('mMap').classList.toggle('on', m === 'map');
+  if (m !== 'outlets' && typeof planOn !== 'undefined' && planOn) setPlan(false);   // the plan belongs to the map builder
+  $('trackPanel').style.display = m === 'track' ? '' : 'none'; $('calPanel').style.display = m === 'cal' ? '' : 'none';
+  fixtureMeshes.forEach(x => x.visible = m === 'cal' ? false : show.fix);
+  if (m !== 'track') hideTracking(); else if (state?.estimates) renderState();
+  calib?.setActive(m === 'cal'); onboard?.setActive(m === 'onboard'); outlets?.setActive(m === 'outlets'); advisor?.setActive(m === 'outlets');
+  receivers?.setActive(m === 'receivers');
+  map?.setActive(m === 'map');                       // last: the outlets and calibrate tabs reset show.floors
+}
+
+// ---------- panel ----------
+const pct = (p) => p == null ? '' : Math.round(100 * p) + '%';
+const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function updatePanel() {
+  const est = state.estimates || {}, src = state.source || {};
+  // status row (Nick 2026-09-26: the top-left card duplicated the tables, so only the source state lives on)
+  const age = src.since_ok, live = src.kind === 'replay' ? 'REPLAY' : (src.error ? 'HA ERROR' : 'LIVE');
+  const cls = src.error ? 'off' : (age != null && age > 10 ? 'stale' : 'live');
+  const dev = deviceStatus(state);
+  let head = `<span class="pill ${cls}">${live}</span><span class="muted">${esc(dev.label)}</span>`;
+  if (dev.pill) head += ` <span class="pill off">${esc(dev.pill)}</span>`;
+  $('status').innerHTML = head;
+  if (state.devices_recovered && !$('recovered')) {
+    const div = document.createElement('div'); div.id = 'recovered'; div.className = 'row';
+    div.innerHTML = `<span class="pill off">device list was unreadable</span> <span class="muted">rebuilt from defaults; ` +
+                    `the old file is ${esc(state.devices_recovered.backup)}</span> <button id="recOk">OK</button>`;
+    $('status').appendChild(div);
+    $('recOk').onclick = () => post('api/devices/dismiss_recovered', {}).then(() => div.remove());
+  }
+  // estimates table
+  let h = '<tr><th>model</th><th>floor</th><th>room</th><th>filtered</th></tr>';
+  for (const m of Object.keys(MODEL_COLOR)) {
+    const e = est[m];
+    if (!e || !e.xy) { h += `<tr><td>${m}</td><td colspan=3 class="muted">no estimate</td></tr>`; continue; }
+    const f = e.filtered?.[0];
+    h += `<tr><td class="${m === 'FreeSpace' ? 'fs' : 'dp'}">${m}</td><td>${esc(e.floor_name)} <span class="muted">${pct(e.p_floor)}</span></td>
+          <td>${esc(e.room)} <span class="muted">${pct(e.p_room)}</span><br><span class="muted">${e.verdict === 'CALL' ? 'confident' : 'declines to call'} · ±${e.r68.toFixed(1)} m</span>${e.motion_db != null ? `<br><span class="muted">motion ${e.motion_db.toFixed(1)} dB · ${e.motion_db < 2 ? 'still' : e.motion_db < 5 ? 'shifting' : 'moving'}</span>` : ''}</td>
+          <td>${f ? esc(f.room) + ' <span class="muted">' + pct(f.p) + '</span>' : '<span class="muted">off</span>'}</td></tr>`;
+  }
+  $('est').innerHTML = h;
+  const bl = src.device_info || {};
+  const bs = est['Bermuda (sim)'], bo = est['Bermuda+offsets (sim)'];
+  $('bermuda').innerHTML = `Bermuda itself: <b>${esc(bl.bermuda_area ?? '—')}</b> ${esc(bl.bermuda_floor ?? '')}` +
+    (bs ? ` · loudest scanner rule: ${esc(bs.room)}` : '') + (bo ? ` · with offsets: ${esc(bo.room)}` : '');
+  // scanners
+  let s = '<tr><th>scanner</th><th class="num">median</th><th class="num">n</th><th class="num">age</th></tr>';
+  for (const name of state.scanners || []) {
+    const w = state.window?.[name], dead = (state.dead || []).includes(name);
+    s += `<tr><td><span class="dot" style="background:${dead ? 'var(--bad)' : (w ? 'var(--ok)' : 'var(--warn)')}"></span>${esc(name)}</td>
+          <td class="num">${dead ? '<span class="muted">dead</span>' : (w ? w.med.toFixed(0) : '<span class="muted">—</span>')}</td>
+          <td class="num">${w ? w.n : ''}</td><td class="num">${w ? w.age.toFixed(0) + 's' : ''}</td></tr>`;
+  }
+  $('scan').innerHTML = s;
+  // truths
+  const tr = (state.truths || []).slice(-4).reverse();
+  $('truths').innerHTML = tr.length ? tr.map(t => {
+    const got = Object.entries(t.estimates_at_label || {}).map(([m, e]) =>
+      `<span class="${m === 'FreeSpace' ? 'fs' : 'dp'}">${esc(e.room)}${e.room === t.room ? ' ✓' : ' ✗'}</span>`).join(' ');
+    return `${new Date(t.t * 1000).toLocaleTimeString()} · <b>${esc(t.room)}</b> · ${got}`; }).join('<br>') : 'Tap “I\'m here”, then tap where you are.';
+  $('sess').innerHTML = state.session ? `recording <a style="color:#93c5fd" href="api/sessions/${state.session}" download>${state.session}</a>` +
+    `<br>model v3 · ${Object.entries(state.code || {}).map(([k, v]) => k.replace('.py', '') + ' ' + v).slice(0, 3).join(' · ')}` : 'not recording';
+  if (src.error) $('sess').innerHTML += `<br><span style="color:var(--bad)">${esc(src.error)}</span>`;
+  // controls reflecting server config
+  const cfg = state.cfg || {};
+  if (document.activeElement !== $('half')) { $('half').value = cfg.halflife; $('halfV').textContent = cfg.halflife + ' s'; }
+  renderTracking(cfg);
+  if (document.activeElement !== $('estSel')) $('estSel').value = cfg.estimator;
+  $('tMotion').classList.toggle('on', !!cfg.motion);
+}
+
+function renderTracking(cfg) {
+  const devs = state.devices || {};
+  $('showAll').style.display = isolate ? '' : 'none';
+  let html = '';
+  for (const r of state.tracked || []) {
+    const dev = devs[r.key] || { name: r.label, kind: 'tag' }, name = dev.name || r.label;
+    if (ui.renaming === r.key) {
+      html += `<div class="dev edit" data-k="${esc(r.key)}">` +
+        `<input type="text" id="renameIn" maxlength="64" value="${esc(name)}" aria-label="name">` +
+        `<div class="ctl" style="margin-top:8px"><span class="seg"><button data-act="kind" data-kind="tag" class="${dev.kind === 'tag' ? 'on' : ''}">Tag</button>` +
+        `<button data-act="kind" data-kind="phone" class="${dev.kind === 'phone' ? 'on' : ''}">Phone</button>` +
+        `<button data-act="kind" data-kind="pet" class="${dev.kind === 'pet' ? 'on' : ''}">Pet</button></span>` +
+        `<button data-act="calibrate">Calibrate this device</button></div>` +
+        `<div class="ctl" style="margin-top:8px"><button data-act="save" class="primary">Save</button><button data-act="cancel">Cancel</button></div></div>`;
+      continue;
+    }
+    if (ui.confirm === r.key) {
+      html += `<div class="dev edit" data-k="${esc(r.key)}">Delete <b>${esc(name)}</b>? It stops being tracked and is removed from Home Assistant.` +
+              `<div class="ctl" style="margin-top:8px"><button data-act="del" class="armed">Delete</button><button data-act="cancel">Cancel</button></div></div>`;
+      continue;
+    }
+    const m = rowModel({ ...r, away_text: r.status === 'away' ? awayText(r) : undefined }, dev, hidden);
+    html += `<div class="dev ${isolate === r.key ? 'focus' : ''} ${m.dim ? 'dim' : ''}" data-k="${esc(r.key)}" title="${isolate === r.key ? 'click to show every device' : 'click to show only this device'}">` +
+      `<span class="dot" style="background:${hex(devColor(r.key))}"></span>` +
+      `<div><div class="line"><span>${esc(m.name)}</span><span class="where">${esc(m.where)}</span></div>` +
+      `<div class="detail">${esc(m.detail)}</div></div>` +
+      `<div class="act"><button data-act="hide" title="${m.hidden ? 'show on the map' : 'hide on the map'}">${m.hidden ? '🙈' : '👁'}</button>` +
+      `<button data-act="rename" title="edit">✎</button><button data-act="remove" title="delete">🗑</button></div></div>`;
+  }
+  const inp = $('renameIn'), keep = inp && { v: inp.value, f: document.activeElement === inp,
+                                            a: inp.selectionStart, b: inp.selectionEnd };
+  $('devList').innerHTML = html;                 // the poll re-renders every 1.5 s: keep what is being typed
+  const again = $('renameIn');
+  if (keep && again) { again.value = keep.v; if (keep.f) { again.focus(); again.setSelectionRange(keep.a, keep.b); } }
+  if (ui.kind) $('devList').querySelectorAll('[data-act=kind]').forEach(b => b.classList.toggle('on', b.dataset.kind === ui.kind));
+}
+// isolate one device: every other flag hides and the camera flies to it; click again (or Show all, or Esc) to release
+async function isolateDevice(k) {
+  isolate = isolate === k ? null : k;
+  if (isolate) {
+    const r = (state.tracked || []).find(x => x.key === k);
+    if (state.cfg?.device !== k) { const c = await post('api/config', { device: k }); if (c && c.tracked) state.cfg = c; }
+    if (r?.est?.xy) { if (!show.floors.has(r.est.map_floor)) { show.floors.add(r.est.map_floor); applyExplode(); } flyTo(r.est.map_floor, r.est.display_xy || r.est.xy); }
+  }
+  renderTracking(state.cfg || {}); if (state?.estimates) renderState();
+}
+$('showAll').onclick = () => { isolate = null; renderTracking(state.cfg || {}); if (state?.estimates) renderState(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && isolate) $('showAll').onclick(); });
+$('devList').onclick = async (ev) => {
+  const row = ev.target.closest('.dev'); if (!row) return;
+  const k = row.dataset.k, b = ev.target.closest('button'), act = b?.dataset.act;
+  try {
+    if (act === 'hide') { hidden = toggleHidden(hidden, k); saveHidden(hidden, localStorage); if (state?.estimates) renderState(); }
+    else if (act === 'rename') { ui.renaming = k; ui.confirm = null; ui.kind = state.devices?.[k]?.kind || 'tag'; }
+    else if (act === 'kind') { ui.kind = b.dataset.kind; }
+    else if (act === 'calibrate') { ui.renaming = null; setMode('cal'); toast('calibrate: ' + shortName(state.devices?.[k]?.name)); }
+    else if (act === 'remove') { ui.confirm = k; ui.renaming = null; }
+    else if (act === 'cancel') { ui.renaming = ui.confirm = null; }
+    else if (act === 'save') { await api('PATCH', 'api/devices/' + k, { name: $('renameIn').value, kind: ui.kind }); ui.renaming = null; toast('saved'); }
+    else if (act === 'del') { await api('DELETE', 'api/devices/' + k); ui.confirm = null; if (isolate === k) isolate = null; toast('deleted'); }
+    else if (!act && !row.classList.contains('edit')) { await isolateDevice(k); return; }
+  } catch (e) { toast(e.message); }
+  renderTracking(state.cfg || {});
+};
+
+
+// ---------- controls ----------
+function toggle(id, key, after) {
+  $(id).onclick = () => { show[key] = !show[key]; $(id).classList.toggle('on', show[key]); after?.(); if (state) renderState(); };
+}
+toggle('tTrail', 'trail');
+$('heatSel').onchange = (e) => { show.heat = !!e.target.value; show.heatModel = e.target.value; if (state) renderState(); };
+toggle('tFix', 'fix', () => fixtureMeshes.forEach(m => m.visible = show.fix));
+toggle('tLabels', 'labels', applyLabels);
+toggle('tCut', 'cut', applyWalls);
+toggle('tConf', 'conf');
+toggle('tFilter', 'filter', () => post('api/config', { filter: show.filter }));
+$('explode').oninput = (e) => { explode = +e.target.value; applyExplode(); };
+$('half').oninput = (e) => $('halfV').textContent = e.target.value + ' s';
+$('half').onchange = (e) => post('api/config', { halflife: +e.target.value });
+$('estSel').onchange = (e) => post('api/config', { estimator: e.target.value });
+$('tMotion').onclick = () => post('api/config', { motion: !(state && state.cfg && state.cfg.motion) });
+$('btnReset').onclick = () => post('api/config', { reset_filter: true }).then(() => toast('room filter reset'));
+$('btnHere').onclick = () => { labelMode = !labelMode; $('btnHere').classList.toggle('armed', labelMode);
+  $('btnHere').textContent = labelMode ? 'tap where you are (tap here to cancel)' : '📍 I\'m here — tap the map'; };
+$('btnRoom').onclick = () => { const [fi, room] = $('roomSel').value.split('|');
+  post('api/truth', { floor: +fi, room }).then(() => toast('labelled: ' + room)); };
+$('camIso').onclick = () => { setPlan(false); isoView(); }; $('camTop').onclick = () => { setPlan(false); topView(); };
+$('camPlan').onclick = () => setPlan(true);
+let planOn = false, planHover = null, planXY = null;
+function planFloor() { return show.floors.size === 1 ? [...show.floors][0] : 1; }
+function renderPlan() {
+  if (!planOn || !house) return;
+  const cv = $('planCanvas'); cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+  const fi = planFloor();
+  const markers = [];
+  for (const s of house.scanners) if (s.floor === fi) markers.push({ x: s.x, y: s.y, colour: s.kind === 'echo' ? '#06b6d4' : '#22c55e' });
+  if (state?.tracked) for (const r of state.tracked) { const e = r.est; if (e?.xy && e.map_floor === fi) markers.push({ x: e.xy[0], y: e.xy[1], colour: '#f97316', label: r.label }); }
+  const g = drawPlan(cv, house, fi, { markers, hover: planHover });
+  planXY = { pad: 40, s: g.s, H: house.floors[fi].ymax, x0: house.floors[fi].x0 || 0 };
+}
+function setPlan(on) {
+  planOn = on; $('plan').style.display = on ? 'block' : 'none'; $('camPlan').classList.toggle('on', on);   // the stylesheet hides it: '' would not show it
+  try { localStorage.setItem('viewMode', on ? 'plan' : '3d'); } catch (e) { /* private window */ }
+  if (on) requestAnimationFrame(renderPlan);      // after the container is shown: its size is 0 while display:none
+}
+$('planCanvas').addEventListener('mousemove', (e) => {
+  if (!planOn || !planXY) return;
+  const h = fixtureAt(house, planFloor(), planXY, e.offsetX, e.offsetY);
+  if (h !== planHover) { planHover = h; renderPlan(); }
+});
+window.addEventListener('resize', () => { if (planOn) renderPlan(); });
+$('handle').onclick = () => $('panel').classList.toggle('min');
+$('mTrack').onclick = () => setMode('track');
+$('mSetup').onclick = () => setMode(lastSetup);
+$('mCal').onclick = () => setMode('cal');
+$('mOnb').onclick = () => setMode('onboard');
+$('mOut').onclick = () => setMode('outlets');
+$('mMap').onclick = () => setMode('map');
+$('mRx').onclick = () => setMode('receivers');
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return r.json();
+}
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json' },
+                                body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+const ui = { renaming: null, confirm: null, kind: null };
+function when(t) {
+  if (t == null) return '';
+  const d = new Date(t * 1000), clock = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? clock : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + clock;
+}
+const awayText = (r) => 'away since ' + when(r.last_seen) + (r.last_room ? ', last in the ' + r.last_room : '');
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 2200); }
+
+// tap-to-label: a tap (not a drag) on a floor while armed records ground truth
+const ray = new THREE.Raycaster(); let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => down = { x: e.clientX, y: e.clientY, t: performance.now() });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!labelMode || !down) return;
+  if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 600) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const hit = ray.intersectObjects(roomMeshes.filter(m => floorGroups[m.userData.floor].visible), false)[0];
+  if (!hit) return toast('tap on a floor');
+  const fi = hit.object.userData.floor, x = hit.point.x, y = -hit.point.z;
+  post('api/truth', { floor: fi, x, y }).then(t => toast(`labelled: ${t.room ?? '?'} (${house.floors[fi].name})`));
+  $('btnHere').click();
+});
+
+function isoView() {
+  const k = narrow() ? 1.9 : 1.0;                      // pull back on narrow screens
+  const c = houseCentre(house), mid = Math.min(1, house.floors.length - 1);
+  camera.position.set(c.x + (-11.5) * k, base(mid) + 1 + 13 * k, -c.y + 13.1 * k);
+  controls.target.set(c.x, base(mid) + 1, -c.y); controls.update();
+}
+function topView() {
+  const fi = [...show.floors].length === 1 ? [...show.floors][0] : Math.min(1, house.floors.length - 1);
+  const c = houseCentre(house);
+  camera.position.set(c.x, base(fi) + (narrow() ? 26 : 17), -c.y + 0.1); controls.target.set(c.x, base(fi), -c.y - 0.02); controls.update();
+}
+
+// ---------- boot ----------
+// A new household's engine waits for its house (setup mode, plan 2026-10-01-a3): until the house has rooms and a placed
+// receiver there is nothing to track, so the page is the map editor and a note saying what comes next.
+const START_HERE = {
+  rooms: 'Start here: draw your home on the map - its floors and rooms - then Apply.',
+  receivers: 'Next: place the receivers Home Assistant hears where they are plugged in, then Apply. Tracking starts then.',
+};
+function bootSetup(h) {
+  $('modes').style.display = 'none';
+  ['mOut', 'mCal', 'mOnb', 'mRx'].forEach((id) => { $(id).style.display = 'none'; });
+  $('status').innerHTML = `<p class="start">${esc(START_HERE[h.missing] || START_HERE.rooms)}</p>`;
+  map = initMap({ $, esc, toast, setup: true });
+  setMode('map');
+}
+async function boot() {
+  house = await (await fetch('api/house')).json();
+  if (house.setup) return bootSetup(house);
+  show.floors = new Set(house.floors.map(f => f.index));   // every floor of the house (house.json)
+  state = { models: house.models };
+  buildHouse(); isoView();
+  calib = initCalib({ THREE, CSS2DObject, scene, camera, renderer, house, floorGroups, roomMeshes, show, applyExplode,
+                      topView, base, P, post, toast, esc, $, floorBtnSync: (fi) => $('floorBtns').querySelectorAll('button')
+                        .forEach(b => b.classList.toggle('on', fi == null || +b.dataset.f === fi)) });
+  onboard = initOnboard({ THREE, CSS2DObject, scene, P, show, toast, esc, $ });
+  receivers = initReceivers({ $, esc, toast });
+  map = initMap({ $, esc, toast });
+  try { if (localStorage.getItem('viewMode') === 'plan') setPlan(true); } catch (e) { /* private window */ }
+  outlets = initOutlets({ THREE, CSS2DObject, scene, camera, renderer, house, roomMeshes, show, applyExplode, topView, P, toast,
+                          esc, $, floorBtnSync: (fi) => $('floorBtns').querySelectorAll('button')
+                            .forEach(b => b.classList.toggle('on', fi == null || +b.dataset.f === fi)) });
+  advisor = initAdvisor({ $, toast, outlets, map, openMap: () => setMode('map'), floorNames: house.floors.map(f => f.name) });
+  $('modelBtns').innerHTML = house.models.map(m => `<button data-m="${m}" class="on ${m === 'FreeSpace' ? 'fs' : 'dp'}">${m}</button>`).join('');
+  $('modelBtns').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const m = b.dataset.m; show.models.has(m) ? show.models.delete(m) : show.models.add(m); b.classList.toggle('on'); if (state.estimates) renderState(); updatePanel(); });
+  $('floorBtns').innerHTML = house.floors.map((f, i) => `<button data-f="${i}" class="on">${f.name}</button>`).join('');
+  $('floorBtns').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const f = +b.dataset.f;
+    if (planOn) {                                   // the plan shows one floor: a floor button selects it
+      show.floors = new Set([f]);
+      $('floorBtns').querySelectorAll('button').forEach(x => x.classList.toggle('on', +x.dataset.f === f));
+    } else { show.floors.has(f) ? show.floors.delete(f) : show.floors.add(f); b.classList.toggle('on'); }
+    applyExplode(); });
+  $('roomSel').innerHTML = house.floors.map((f, fi) => `<optgroup label="${f.name}">` +
+    house.rooms.filter(r => r.floor === fi).map(r => `<option value="${fi}|${esc(r.name)}">${esc(r.name)}</option>`).join('') + '</optgroup>').join('');
+  $('estSel').innerHTML = Object.entries(house.estimators || {}).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+  poll();
+  try { if (localStorage.getItem('openMap') === '1') { localStorage.removeItem('openMap'); setMode('map'); } }  // after an apply
+  catch (e) { /* private window */ }
+}
+async function poll() {
+  try {
+    const s = await (await fetch('api/state')).json();
+    if (s.ready) { state = s; renderState(); updatePanel(); }
+  } catch (e) { console.error('poll', e); $('status').innerHTML = '<span class="pill off">' + (e instanceof TypeError && !/fetch/i.test(e.message) ? 'page error' : 'server unreachable') + '</span>'; }
+  setTimeout(poll, 1500);
+}
+let fly = null;
+function flyTo(fi, xy) {
+  const to = P(fi, xy[0], xy[1], 1.0), pos = to.clone().add(new THREE.Vector3(-4.5, 6.5, 4.5));   // ~9 m out, from the south-west, above the walls
+  fly = { t0: performance.now(), ms: 700, p0: camera.position.clone(), p1: pos, c0: controls.target.clone(), c1: to };
+}
+function loop() {
+  if (fly) {
+    const t = Math.min(1, (performance.now() - fly.t0) / fly.ms), e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.c0, fly.c1, e);
+    if (t >= 1) fly = null;
+  }
+  controls.update(); renderer.render(scene, camera); css.render(scene, camera); requestAnimationFrame(loop);
+}
+boot(); loop();
+</script>
+</body>
+</html>

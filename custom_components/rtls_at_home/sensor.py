@@ -6,7 +6,8 @@ import time
 from datetime import datetime
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -15,7 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from . import RtlsConfigEntry
 from .const import WRITE_EVERY
-from .entity import device_info
+from .entity import ChangeWriter, device_info, engine_device, meta_receiver, receiver_device
 from .runner import BridgeRunner
 
 AWAY = "Away"
@@ -53,6 +54,28 @@ async def async_setup_entry(
 
     entry.async_on_unload(async_dispatcher_connect(hass, runner.removed_signal, _forget))
     _add_new()
+
+    meta_known: set[str] = set()
+
+    @callback
+    def _add_meta() -> None:
+        """The engine's own sensors and each receiver's, once a meta lists them (an older engine sends none)."""
+        if not runner.meta:
+            return
+        new: list[SensorEntity] = []
+        if "engine" not in meta_known:
+            meta_known.add("engine")
+            new += [EngineStatus(runner), ReceiversHeard(runner), DevicesPresent(runner)]
+        for rx in runner.meta.get("receivers") or []:
+            if rx.get("name") and "rx:" + rx["name"] not in meta_known:
+                meta_known.add("rx:" + rx["name"])
+                device = receiver_device(hass, rx)
+                new += [ReceiverCorrection(runner, rx["name"], device), ReceiverPlace(runner, rx["name"], device)]
+        if new:
+            async_add_entities(new)
+
+    entry.async_on_unload(async_dispatcher_connect(hass, runner.meta_signal, _add_meta))
+    _add_meta()
 
 
 class RtlsSensor(SensorEntity):
@@ -129,12 +152,125 @@ class RtlsSensor(SensorEntity):
             "radius_m": rnd(row.get("r68"), 1),
             "verdict": row.get("verdict"),
             "near": row.get("near"),
-            "ha_area": self._ha_area(row.get("room")),
+            "ha_area": row.get("area") or self._ha_area(row.get("room")),
         }
 
     def _ha_area(self, room: str | None) -> str | None:
-        """The Home Assistant area with the same name as the room, if there is one (spec section 11)."""
+        """The Home Assistant area with the same name as the room, if there is one: the fallback when the map leaves
+        the room unlinked (the map's link, the row's `area`, wins)."""
         if not room or self.hass is None:
             return None
         area = ar.async_get(self.hass).async_get_area_by_name(room)
         return area.id if area else None
+
+
+class EngineStatus(ChangeWriter, SensorEntity):
+    """tracking; applying while a new house is applied; setup until the house has rooms and a placed receiver (a new
+    household's engine runs no tracker before that); unavailable while the engine is unreachable."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["tracking", "applying", "setup"]
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "status"
+
+    def __init__(self, runner: BridgeRunner) -> None:
+        self._init_change(runner, "engine-status")
+        self._attr_device_info = engine_device(runner)
+
+    @property
+    def available(self) -> bool:
+        return self._runner.available and bool(self._runner.meta)
+
+    @property
+    def native_value(self) -> str | None:
+        return ((self._runner.meta or {}).get("engine") or {}).get("status")
+
+
+class ReceiversHeard(ChangeWriter, SensorEntity):
+    """How many receivers the engine hears and has switched on, of all it knows (`total`)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "receivers_heard"
+
+    def __init__(self, runner: BridgeRunner) -> None:
+        self._init_change(runner, "engine-receivers_heard")
+        self._attr_device_info = engine_device(runner)
+
+    def _rows(self) -> list[dict[str, Any]]:
+        return (self._runner.meta or {}).get("receivers") or []
+
+    @property
+    def available(self) -> bool:
+        return self._runner.available and bool(self._runner.meta)
+
+    @property
+    def native_value(self) -> int:
+        return sum(1 for r in self._rows() if r.get("alive") and r.get("enabled", True) is not False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"total": len(self._rows())}
+
+
+class DevicesPresent(ChangeWriter, SensorEntity):
+    """How many tracked devices are present (not away)."""
+
+    _attr_translation_key = "devices_present"
+
+    def __init__(self, runner: BridgeRunner) -> None:
+        self._init_change(runner, "engine-devices_present")
+        self._attr_device_info = engine_device(runner)
+
+    @property
+    def available(self) -> bool:
+        return self._runner.available
+
+    @property
+    def native_value(self) -> int:
+        return sum(1 for r in self._runner.tracked.values() if r.get("status") != "away")
+
+
+class ReceiverCorrection(ChangeWriter, SensorEntity):
+    """The engine's live correction of the receiver's signal level (dB, against its own long-run anchors)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = "dB"
+    _attr_translation_key = "correction"
+
+    def __init__(self, runner: BridgeRunner, name: str, device: Any) -> None:
+        self._init_change(runner, f"receiver-{name}-correction")
+        self._name = name
+        self._attr_device_info = device
+
+    @property
+    def available(self) -> bool:
+        return self._runner.available and meta_receiver(self._runner, self._name) is not None
+
+    @property
+    def native_value(self) -> float | None:
+        c = (meta_receiver(self._runner, self._name) or {}).get("correction")
+        return round(c, 1) if isinstance(c, (int, float)) else None
+
+
+class ReceiverPlace(ChangeWriter, SensorEntity):
+    """The room the map places the receiver in, with its floor."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "placed"
+
+    def __init__(self, runner: BridgeRunner, name: str, device: Any) -> None:
+        self._init_change(runner, f"receiver-{name}-placed")
+        self._name = name
+        self._attr_device_info = device
+
+    @property
+    def available(self) -> bool:
+        return self._runner.available and meta_receiver(self._runner, self._name) is not None
+
+    @property
+    def native_value(self) -> str | None:
+        return (meta_receiver(self._runner, self._name) or {}).get("room")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"floor": (meta_receiver(self._runner, self._name) or {}).get("floor_name")}

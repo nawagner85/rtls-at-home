@@ -1,0 +1,35 @@
+# RTLS@Home as a Home Assistant App (spec docs/specs/2026-10-01-ha-app-design.md). tools/deploy_ha_app.sh stamps the
+# version with the commit and copies the App, with the engine's source, into Home Assistant's /addons.
+name: RTLS@Home
+version: "0.1.0"
+slug: rtls_at_home
+description: Which room each tracked Bluetooth device is in, from your ESPHome proxies - the engine and its map editor
+url: https://github.com/nawagner85/rtls-at-home
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8765
+panel_icon: mdi:map-marker-radius
+panel_title: RTLS@Home
+ports:
+  8765/tcp: null
+ports_description:
+  8765/tcp: The engine's page and API, for debugging only (Home Assistant reaches the engine without it)
+hassio_api: true
+discovery:
+  - rtls_at_home
+map:
+  - addon_config:rw
+watchdog: tcp://[HOST]:[PORT:8765]
+backup_exclude:
+  - "*.jsonl"
+  - "*.jsonl.gz"
+  - build
+  - "build/*"
+  - cache
+  - "cache/*"
+options: {}
+schema: {}

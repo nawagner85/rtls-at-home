@@ -46,6 +46,7 @@ async def test_sightings_follow_the_engines_wanted_list(hass: HomeAssistant, aio
     first, second = _posted(aioclient_mock, 0), _posted(aioclient_mock, 1)
     assert first["v"] == 1 and first["adverts"] == [] and first["scanners"][0][0] == "00:00:5e:00:53:f1"
     assert "census" in first and "census" not in second
+    assert "places" in first and "places" not in second             # HA's floors and areas travel with the census
     assert second["adverts"] == [[KEY, "00:00:5e:00:53:f1", -60, 10.5]]
 
 

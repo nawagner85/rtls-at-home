@@ -27,10 +27,12 @@ from .const import (
     DETAIL_CENSUS_INTERVAL,
     DOMAIN,
     PROTOCOL_VERSION,
+    SIGNAL_META,
     SIGNAL_REMOVED,
     SIGNAL_UPDATE,
     STALE_AFTER,
 )
+from .places import places
 from .reader import CensusDetail, SightingReader, census
 
 try:  # the clock habluetooth stamps sightings with
@@ -64,6 +66,8 @@ class BridgeRunner:
         self.signal = SIGNAL_UPDATE.format(entry.entry_id)
         self.removed_signal = SIGNAL_REMOVED.format(entry.entry_id)
         self.removed: set[str] = set()
+        self.meta: dict[str, Any] | None = None  # the engine's status, rooms and receivers; None from an older engine
+        self.meta_signal = SIGNAL_META.format(entry.entry_id)
         self.detail = None  # onboarding's detailed census (Task 5); stays None with a 0.1.0-style engine
         self._synced: tuple | None = None
         self._busy = False
@@ -113,6 +117,8 @@ class BridgeRunner:
                 wall = batch["sent_wall"]
                 self.detail.annotate(rows, mono, self.reader.first_seen, lambda stamp: wall - (mono - stamp))
             batch["census"] = rows
+            batch["places"] = places(self.hass)  # HA's floors and areas, for the engine's map editor
+            batch["meta"] = True  # and the engine's status, rooms and receivers back (protocol: meta)
             self.reader.prune(mono, DEDUPE_KEEP)
             self._next_census = now + (DETAIL_CENSUS_INTERVAL if self.detail is not None else self.census_every)
         try:
@@ -141,6 +147,9 @@ class BridgeRunner:
         else:
             self.detail = None
         self._sync_devices()
+        if isinstance(reply.get("meta"), dict):
+            self.meta = reply["meta"]
+            async_dispatcher_send(self.hass, self.meta_signal)
         async_dispatcher_send(self.hass, self.signal)
 
     def _sync_devices(self) -> None:

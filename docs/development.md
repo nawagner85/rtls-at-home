@@ -8,10 +8,15 @@ custom_components/rtls_at_home/
     config_flow.py    config and options flows
     client.py         HTTP client for the engine (protocol v1)
     reader.py         Bluetooth scanners -> sightings, iBeacon keys, census (pure Python)
-    runner.py         the poll/post loop, back-off, the engine's answers
-    sensor.py         room, floor and location sensors
+    places.py         Home Assistant's floors and areas, sent with the census
+    runner.py         the poll/post loop, back-off, the engine's answers and meta
+    entity.py         the devices (tracked, engine, area presence, receivers), write-on-change
+    sensor.py         room, floor and location; the engine's and the receivers' sensors
+    binary_sensor.py  presence per area, receiver heard
+    device_tracker.py home / not_home
+    diagnostics.py    download diagnostics (token redacted)
     const.py          constants
-    strings.json      UI text (translations/en.json is a copy)
+    strings.json      UI text (translations/en.json is a copy); icons.json the icons
 tests/                pytest with pytest-homeassistant-custom-component
 tools/
     bt_requirements.py  requirements of HA's Bluetooth integration, for the test environment

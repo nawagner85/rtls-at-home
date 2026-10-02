@@ -24,6 +24,11 @@ class EngineClient:
         self._url = url.rstrip("/")
         self._headers = {"Authorization": f"Bearer {token}"}
 
+    @property
+    def url(self) -> str:
+        """The engine's address (its page, for the devices' "Visit" link)."""
+        return self._url
+
     async def hello(self) -> dict[str, Any]:
         """Protocol version and token check."""
         return await self._request("GET", "/api/ingest/hello")

@@ -19,7 +19,8 @@ MAC = re.compile(r"\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b", re.I)
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 UUID = re.compile(r"\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\b", re.I)
 ALLOWED_IP = re.compile(r"^(192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|127\.0\.0\.1$|0\.0\.0\.0$)")
-ALLOWED_UUIDS = {"00112233445566778899aabbccddeeff"}
+ALLOWED_UUIDS = {"00112233445566778899aabbccddeeff",
+                 "6e400001b5a3f393e0a9e50e24dcca9e"}  # the Nordic UART service: a published standard, in a test
 SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv"}
 TEXT_SUFFIXES = {".py", ".md", ".json", ".yaml", ".yml", ".toml", ".txt", ".cfg", ".ini", ".sh", ""}
 
@@ -36,6 +37,8 @@ def findings_in(text: str, private_words: list[str]) -> list[Finding]:
         if not m.group(0).lower().replace("-", ":").startswith("00:00:5e:00:53:"):
             out.append(Finding("mac", m.group(0)))
     for m in IPV4.finditer(text):
+        if text[max(0, m.start() - 2):m.start()] in ("==", "~=", ">=", "<="):
+            continue                    # a package version pin (opencv-python-headless==4.10.0.84), not an address
         if not ALLOWED_IP.match(m.group(0)):
             out.append(Finding("ipv4", m.group(0)))
     for m in UUID.finditer(text):

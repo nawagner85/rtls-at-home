@@ -4,8 +4,9 @@ RTLS@Home has two parts:
 
 - **The bridge** (this repository): a Home Assistant integration. It reads what Home Assistant's Bluetooth stack
   has heard, sends it to the engine, and turns the engine's answers into sensors.
-- **The engine**: a separate service that holds the house model (floors, walls, furniture, receiver positions and
-  their calibration) and estimates where each tracked device is. Not public yet (see [Roadmap](#roadmap)).
+- **The engine** (the RTLS@Home App, `rtls_at_home/` in this repository): holds the house model (floors, walls,
+  furniture, receiver positions and their calibration) and estimates where each tracked device is. It runs as a Home
+  Assistant App, its map editor in Home Assistant's sidebar.
 
 ```mermaid
 sequenceDiagram
@@ -67,9 +68,9 @@ Full format: [protocol.md](protocol.md).
 
 1. **Bluetooth feed** (this release): the bridge.
 2. **Results into Home Assistant** (this release): room, floor and location sensors.
-3. **Configuration as data:** floors, rooms, walls, furniture, proxies and devices become an editable model instead
-   of code, which also lets the engine be published.
-4. **Packaging:** the engine and its web UI as a Home Assistant App and a Docker image.
+3. **Configuration as data** (0.5.0): floors, rooms, walls, furniture, proxies and devices are an editable model,
+   and a new house starts from nothing on a default model.
+4. **Packaging** (0.5.0): the engine and its web UI as a Home Assistant App.
 5. **Editors and onboarding:** draw floors and rooms, place proxies (a proxy counts only once placed), recruit tags
    from the nearby-device list and name them, link rooms to Home Assistant areas, draw named places that are not
    areas, name furniture landmarks, and an Assist tool that can answer "where is …" from the map.

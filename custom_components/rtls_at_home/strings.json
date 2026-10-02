@@ -12,6 +12,14 @@
           "url": "For example http://192.0.2.10:8765",
           "token": "The shared secret the engine was started with (RTLS_INGEST_TOKEN)."
         }
+      },
+      "hassio_confirm": {
+        "title": "Connect to the RTLS@Home App",
+        "description": "The RTLS@Home App is running on this Home Assistant. Connect the integration to it?"
+      },
+      "hassio_move": {
+        "title": "Move RTLS@Home to the App",
+        "description": "RTLS@Home is connected to the engine at {current}. The RTLS@Home App is now running on this Home Assistant. Move the integration to the App? Every device and sensor keeps its name, id and history."
       }
     },
     "error": {
@@ -20,7 +28,9 @@
       "unsupported_version": "The engine speaks a different protocol version. Update RTLS@Home or the engine."
     },
     "abort": {
-      "already_configured": "This engine is already connected."
+      "already_configured": "This engine is already connected.",
+      "moved": "RTLS@Home now uses the App.",
+      "invalid_discovery": "The RTLS@Home App announced itself without an address or token."
     }
   },
   "options": {
@@ -36,9 +46,40 @@
   },
   "entity": {
     "sensor": {
-      "room": { "name": "Room" },
-      "floor": { "name": "Floor" },
-      "location": { "name": "Location" }
+      "room": {
+        "name": "Room"
+      },
+      "floor": {
+        "name": "Floor"
+      },
+      "location": {
+        "name": "Location"
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "tracking": "Tracking",
+          "applying": "Applying a new house",
+          "setup": "Setting up the house"
+        }
+      },
+      "receivers_heard": {
+        "name": "Receivers heard"
+      },
+      "devices_present": {
+        "name": "Devices present"
+      },
+      "correction": {
+        "name": "Signal correction"
+      },
+      "placed": {
+        "name": "Placed in"
+      }
+    },
+    "binary_sensor": {
+      "heard": {
+        "name": "Heard"
+      }
     }
   }
 }

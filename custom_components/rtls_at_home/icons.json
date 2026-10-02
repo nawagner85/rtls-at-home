@@ -1,0 +1,23 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "heard": {
+        "default": "mdi:bluetooth-off",
+        "state": { "on": "mdi:bluetooth" }
+      }
+    },
+    "sensor": {
+      "room": { "default": "mdi:door-open" },
+      "floor": { "default": "mdi:stairs" },
+      "location": { "default": "mdi:map-marker" },
+      "status": {
+        "default": "mdi:radar",
+        "state": { "applying": "mdi:progress-wrench", "setup": "mdi:floor-plan" }
+      },
+      "receivers_heard": { "default": "mdi:access-point" },
+      "devices_present": { "default": "mdi:account-multiple" },
+      "correction": { "default": "mdi:tune-vertical" },
+      "placed": { "default": "mdi:map-marker-radius" }
+    }
+  }
+}

@@ -12,8 +12,10 @@ OSI-approved licences, and RTLS@Home's non-commercial licence can't be one (see
 2. Add `https://github.com/nawagner85/rtls-at-home` with the type **Integration**.
 3. Find **RTLS@Home** in HACS and select **Download**.
 4. Restart Home Assistant.
-5. Go to **Settings → Devices & services → Add integration**, search for **RTLS@Home**, and follow the steps in
-   [configuration](configuration.md).
+5. If the RTLS@Home **App** runs on this Home Assistant, **Settings → Devices & services** shows RTLS@Home as
+   discovered: confirm, and it connects to the App (or moves an existing RTLS@Home to it, keeping every device and
+   sensor). Otherwise go to **Settings → Devices & services → Add integration**, search for **RTLS@Home**, and follow
+   the steps in [configuration](configuration.md).
 
 ## By hand
 

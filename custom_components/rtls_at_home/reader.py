@@ -15,6 +15,8 @@ from typing import Any
 from .const import DETAIL_MAX, DETAIL_WINDOW
 
 APPLE = 0x004C
+BASE_UUID = "-0000-1000-8000-00805f9b34fb"  # a standard 16-bit service id is 0000xxxx + this
+MFR_BYTES, SDATA_BYTES = 6, 8  # enough to tell message types and Fast Pair model ids apart; keeps the census small
 
 
 def ibeacon_key(manufacturer_data: dict[int, bytes]) -> str | None:
@@ -35,6 +37,32 @@ def device_keys(address: str, adv: Any) -> list[str]:
     if beacon:
         keys.append(beacon)
     return keys
+
+
+def _uuid16(uuid: Any) -> str:
+    """`fe2c` for a standard 16-bit service id written as a full UUID, else the lower-case UUID."""
+    u = str(uuid).lower()
+    return u[4:8] if len(u) == 36 and u.startswith("0000") and u.endswith(BASE_UUID) else u
+
+
+def advert_fields(adv: Any) -> dict:
+    """What identifies a device besides its name, for onboarding: `mfr` [[company id, first bytes hex], ...],
+    `svc` [service ids], `sdata` {service id: first bytes hex}, `tx` (advertised transmit power). Empty ones are
+    left out."""
+    out: dict = {}
+    md = getattr(adv, "manufacturer_data", None) or {}
+    if md:
+        out["mfr"] = [[int(cid), bytes(data[:MFR_BYTES]).hex()] for cid, data in sorted(md.items())]
+    svc = sorted({_uuid16(u) for u in getattr(adv, "service_uuids", None) or []})
+    if svc:
+        out["svc"] = svc
+    sd = getattr(adv, "service_data", None) or {}
+    if sd:
+        out["sdata"] = {_uuid16(u): bytes(data[:SDATA_BYTES]).hex() for u, data in sorted(sd.items())}
+    tx = getattr(adv, "tx_power", None)
+    if tx is not None and tx != -127:  # -127: not given
+        out["tx"] = int(tx)
+    return out
 
 
 def address_type(address: str, details: Any) -> str | None:
@@ -159,7 +187,8 @@ def census(scanners: list[Any], now_mono: float, window: float, cap: int) -> lis
             if row is None:
                 keys = device_keys(address, adv)
                 best[address] = {"keys": keys, "name": device.name or getattr(adv, "local_name", None),
-                                 "ibeacon": len(keys) > 1, "rssi": adv.rssi, "scanners": 1, "age": age}
+                                 "ibeacon": len(keys) > 1, "rssi": adv.rssi, "scanners": 1, "age": age,
+                                 **advert_fields(adv)}
             else:
                 row["scanners"] += 1
                 row["rssi"] = max(row["rssi"], adv.rssi)
