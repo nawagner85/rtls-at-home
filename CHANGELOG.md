@@ -2,6 +2,23 @@
 
 All notable changes to RTLS@Home. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.0 - 2026-10-03
+
+### Added
+
+- **Pictures of the house.** Each tracked device gets a *Map*: its floor, its room tinted, and its pin. The engine
+  gets a *House map* (every floor, exploded as in the App's viewer, with every shown device's pin) and one
+  *<floor> map* per floor. Each is an ordinary `image` entity, redrawn only when what it shows changes, so a card
+  that's open doesn't refetch for nothing; the last picture stands through an engine outage or its warm-up after a
+  restart. Drop one on a dashboard with a `picture-entity` card, or attach one to a mobile notification - see the
+  README's "Pictures for dashboards".
+- ***Show on house maps*.** A switch per tracked device, on by default: turn it off to keep that device's pin off
+  the floor and house pictures while its own *Map* keeps showing it - useful on a dashboard other people see.
+  Restores its state across a restart.
+- Protocol: `meta.render` (the applied house's hash and its floors) tells the bridge the engine can draw pictures;
+  a bridge makes image entities only once it sees it. New routes: `GET /api/ingest/render/device/<key>.png`,
+  `.../floor/<floor id>.png?show=<key>,...` and `.../house.png?show=<key>,...` (`docs/protocol.md`).
+
 ## 0.5.0 - 2026-10-02
 
 ### Added

@@ -21,6 +21,7 @@ STALE_AFTER = 30.0  # s without an engine reply before entities go unavailable
 BACKOFF_MIN = 0.5
 BACKOFF_MAX = 30.0
 WRITE_EVERY = 10.0  # s: most often a sensor writes state unless its room or floor changed
+RENDER_WAIT = 7.0  # s a picture waits out the engine's warm-up (503s): inside Home Assistant's 10 s IMAGE_TIMEOUT
 PROTOCOL_VERSION = 1
 
 SIGNAL_UPDATE = "rtls_at_home_update_{}"  # .format(entry_id)

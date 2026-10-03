@@ -1,7 +1,7 @@
 # RTLS@Home as a Home Assistant App (spec docs/specs/2026-10-01-ha-app-design.md). tools/deploy_ha_app.sh stamps the
 # version with the commit and copies the App, with the engine's source, into Home Assistant's /addons.
 name: RTLS@Home
-version: "0.1.0"
+version: "0.2.0"
 slug: rtls_at_home
 description: Which room each tracked Bluetooth device is in, from your ESPHome proxies - the engine and its map editor
 url: https://github.com/nawagner85/rtls-at-home

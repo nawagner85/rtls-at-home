@@ -1,7 +1,15 @@
-"""What the engine tells Home Assistant besides positions (spec docs/specs/2026-10-01-ha-ui-design.md): the map's
-rooms and the Home Assistant areas they link to, the receivers with the addresses Home Assistant knows them by, and
-whether the engine is tracking or applying a new house. Pure: the server feeds it the house document and its rows."""
+"""What the engine tells Home Assistant besides positions (spec docs/specs/2026-10-01-ha-ui-design.md and
+2026-10-02-house-renders-design.md): the map's rooms and the Home Assistant areas they link to, the receivers with
+the addresses Home Assistant knows them by, whether the engine is tracking or applying a new house, and the render
+routes' meta. Pure: the server feeds it the house document and its rows."""
+import os
+import sys
+
 import house_apply as HAP
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "..", "solver"))
+import house_doc as HD        # noqa: E402
 
 APPLY_STEPS = {k for k, _ in HAP.STEPS}
 
@@ -30,3 +38,10 @@ def receivers(rows, doc):
 def status(apply_state, idle="tracking"):
     """"applying" while an apply runs one of its steps, else `idle` ("tracking"; "setup" with no engine yet)."""
     return "applying" if apply_state in APPLY_STEPS else idle
+
+
+def render(doc, floors):
+    """Meta for the render routes (spec 2026-10-02 house renders), v1, additive: the applied house's hash (what its
+    pictures show) and its floors, bottom first - `floors` is [(id, name), ...] in that order, the engine's own
+    (not necessarily the document's)."""
+    return {"v": 1, "house": HD.doc_hash(doc)[:12], "floors": [{"id": fid, "name": name} for fid, name in floors]}

@@ -86,7 +86,8 @@ than the engine's own "now" is clamped to now.
 | `census_detail` | `true` while someone has the engine's onboarding panel open: the bridge then sends a detailed census every 5 s. |
 | `tracked[].room_id`, `floor_id` | The engine's map ids of the room and floor (null while away or unplaced). |
 | `tracked[].area` | The Home Assistant area the map links the room to, or null for a logical room. |
-| `meta` | Only when the batch asked for it: `{"engine": {"build", "status"}, "rooms": [{"id", "name", "floor_id", "floor", "area"}], "receivers": [{"name", "kind", "enabled", "alive", "room", "floor", "floor_name", "correction", "mac", "address"}]}`. `status` is `tracking`, `applying` while a new house is applied, or `setup` (with `build` null) until the house has rooms and a placed receiver; `correction` is the engine's live signal correction in dB; `mac` is an ESPHome proxy's Wi-Fi MAC and `address` the Bluetooth source Home Assistant reports, each null when the engine has none. |
+| `meta` | Only when the batch asked for it: `{"engine": {"build", "status"}, "rooms": [{"id", "name", "floor_id", "floor", "area"}], "receivers": [{"name", "kind", "enabled", "alive", "room", "floor", "floor_name", "correction", "mac", "address"}], "render": {...}}`. `status` is `tracking`, `applying` while a new house is applied, or `setup` (with `build` null) until the house has rooms and a placed receiver; `correction` is the engine's live signal correction in dB; `mac` is an ESPHome proxy's Wi-Fi MAC and `address` the Bluetooth source Home Assistant reports, each null when the engine has none. |
+| `meta.render` | Only from an engine that can draw pictures of the house (0.6.0): `{"v": 1, "house": "<12 hex>", "floors": [{"id", "name"}, ...]}`, floors bottom first. `house` is the applied house's hash - what its pictures currently show. The bridge makes image entities only once `render` is present, and gives each floor its own picture entity; an older engine, or one still in setup mode, sends no `render` at all. |
 
 `status`, `last_seen`, `last_room`, `last_floor`, `removed`, `census_detail`, `room_id`, `floor_id`, `area` and
 `meta` are optional: a bridge treats a missing `status` as
@@ -100,3 +101,25 @@ present, and an older bridge ignores them.
 | 401 | Wrong or missing token. |
 | 413 | Body over 1 MB. |
 | 503 | The engine is not accepting bridge data. |
+
+## Pictures (0.6.0)
+
+Three GET routes draw PNGs of the house, from the same house document and rows as the sensors - the axonometric
+view the App's map editor uses. The bridge's image entities (`meta.render`, above) fetch these; a dashboard never
+calls them directly.
+
+| Route | Draws |
+|---|---|
+| `GET /api/ingest/render/device/<key>.png` | That device's floor, its room tinted, and its pin - regardless of its *Show on house maps* switch. |
+| `GET /api/ingest/render/floor/<floor id>.png?show=<key>,<key>,...` | That floor, with the pin of every key in `show` that is tracked, present (not `away`) and placed on it. |
+| `GET /api/ingest/render/house.png?show=<key>,<key>,...` | Every floor, exploded as in the viewer, with the pin of every key in `show` that is tracked, present and placed. |
+
+`show` is a comma-separated list of keys; a missing or empty `show`, or a key nobody tracks, draws no pin for it.
+The token is the same bearer token as ingest.
+
+| Status | Meaning |
+|---|---|
+| 200 | `image/png`, 1024 px wide, transparent corners. |
+| 401 | Wrong or missing token. |
+| 404 | An unknown device key or floor id. |
+| 503 | The engine has no house yet (setup mode), or is still drawing its base layers after a start; `Retry-After: 2`. |

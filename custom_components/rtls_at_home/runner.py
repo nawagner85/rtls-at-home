@@ -62,6 +62,7 @@ class BridgeRunner:
         self.census_every = float(entry.options.get(CONF_CENSUS_INTERVAL, DEFAULT_CENSUS_INTERVAL))
         self.wanted: set[str] = set()  # nothing is sent until the engine says what it wants
         self.tracked: dict[str, dict[str, Any]] = {}
+        self.hidden: set[str] = set()  # keys kept off the floor and house pictures (spec 2026-10-02 house renders)
         self.last_ok: float | None = None
         self.signal = SIGNAL_UPDATE.format(entry.entry_id)
         self.removed_signal = SIGNAL_REMOVED.format(entry.entry_id)

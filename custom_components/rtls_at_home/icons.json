@@ -18,6 +18,14 @@
       "devices_present": { "default": "mdi:account-multiple" },
       "correction": { "default": "mdi:tune-vertical" },
       "placed": { "default": "mdi:map-marker-radius" }
+    },
+    "image": {
+      "map": { "default": "mdi:map-marker-radius" },
+      "house_map": { "default": "mdi:home-map-marker" },
+      "floor_map": { "default": "mdi:floor-plan" }
+    },
+    "switch": {
+      "show_on_maps": { "default": "mdi:map-marker-check" }
     }
   }
 }

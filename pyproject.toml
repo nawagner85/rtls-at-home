@@ -5,7 +5,7 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py314"
 line-length = 120
-extend-exclude = ["rtls_at_home"]   # the App and its engine: linted in the engine's own repository
+extend-exclude = ["./rtls_at_home"]   # the App and its engine, assembled here only at release: anchored to the root so it doesn't also match custom_components/rtls_at_home
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

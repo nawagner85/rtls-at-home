@@ -80,6 +80,22 @@
       "heard": {
         "name": "Heard"
       }
+    },
+    "image": {
+      "map": {
+        "name": "Map"
+      },
+      "floor_map": {
+        "name": "{floor} map"
+      },
+      "house_map": {
+        "name": "House map"
+      }
+    },
+    "switch": {
+      "show_on_maps": {
+        "name": "Show on house maps"
+      }
     }
   }
 }

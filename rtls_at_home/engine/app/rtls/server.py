@@ -42,6 +42,7 @@ import sessionlog as SL         # noqa: E402
 import placement_job as PJ      # noqa: E402
 import house_doc as HD          # noqa: E402
 import ha_meta as HM            # noqa: E402
+import render as R              # noqa: E402
 
 ROOT = E.ROOT
 STATIC = os.path.join(HERE, "static")
@@ -191,6 +192,18 @@ def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 
 
+def local_since(ts):
+    """A mark's `since` (spec 2026-10-02 house renders): the local time ts was last seen, pre-formatted for a
+    caption - "6:12 AM" today, else "Oct 1, 6:12 AM"; None when ts is None."""
+    if ts is None:
+        return None
+    now, t = time.localtime(), time.localtime(ts)
+    clock = f"{t.tm_hour % 12 or 12}:{t.tm_min:02d} {'AM' if t.tm_hour < 12 else 'PM'}"
+    if (t.tm_year, t.tm_yday) == (now.tm_year, now.tm_yday):
+        return clock
+    return f"{time.strftime('%b', t)} {t.tm_mday}, {clock}"
+
+
 jsonable = SL.jsonable
 
 
@@ -295,6 +308,11 @@ class App:
         self.placement = PJ.PlacementJob(args.sessions, log=log)        # the placement advisor (Setup -> Outlets)
         self.house = self.build_house()
         self.landmarks = landmarks_from(self.house["fixtures"], room_of=self.eng.house.room_at)
+        # house renders (spec 2026-10-02): the base layers are drawn once per process, in the background, so the
+        # first request does not block on them; a failed warm-up is terminal (ruling 2) - logged once, never retried
+        self.renderer = R.Renderer(HA.house_payload(self.eng.house, self.eng.floor_names))
+        self.render_error = None
+        threading.Thread(target=self._warm_renderer, daemon=True, name="render-warm").start()
         # ---- in-app calibration (calib.py): rounds, checks and the rig live on the sessions volume
         self.calib_dir = os.path.join(args.sessions, "calib")
         os.makedirs(os.path.join(self.calib_dir, "rounds"), exist_ok=True)
@@ -541,6 +559,35 @@ class App:
                              graph=[[list(a), list(b)] for a, nb in self.eng.graph.items() for b in nb if a < b],
                              models=self.eng.models, code=self.eng.hashes, fit=self.eng.trained))
 
+    # ---- house renders (spec 2026-10-02) ------------------------------------------------
+    def _warm_renderer(self):
+        """The base layers, in the background: a failed warm-up is terminal (ruling 2) - every render route then
+        answers 503 without the renderer trying again on each request."""
+        try:
+            self.renderer.warm()
+        except Exception as e:
+            self.render_error = f"{type(e).__name__}: {e}"
+            log("renderer warm-up failed:", self.render_error)
+
+    def render_marks(self):
+        """The current tracked rows as render.py marks: kind from the device list, floor ids from the house,
+        `since` the local time of `last_seen` (a device with no estimate has x/y/floor_id None)."""
+        with self.lock:
+            rows = list(self.state.get("tracked") or [])
+        by_name = dict(zip(self.eng.floor_names, self.eng.house.ids))
+        marks = []
+        for r in rows:
+            e = r.get("est") or {}
+            xy = e.get("display_xy") or e.get("xy") or [None, None]
+            fi = e.get("floor")
+            fid = self.eng.house.ids[fi] if isinstance(fi, int) and 0 <= fi < len(self.eng.house.ids) else None
+            marks.append(dict(key=r["key"], name=r["label"], kind=self.kind(r["key"]),
+                              floor_id=fid if e.get("room") else None, room=e.get("room"), x=xy[0], y=xy[1],
+                              r68=e.get("r68"), status=r.get("status"),
+                              last_floor_id=by_name.get(r.get("last_floor")), last_room=r.get("last_room"),
+                              since=local_since(r.get("last_seen"))))
+        return marks
+
     # ----------------------------------------------------------------------------------
 
     # ---- calibration -------------------------------------------------------------------
@@ -704,7 +751,8 @@ class App:
                    census_detail=bool(self.onboard and self.onboard.active()))
         if meta:
             out["meta"] = dict(engine=dict(build=self.engine_build, status=HM.status(self.applier.status().get("state"))),
-                               rooms=self.ha_rooms, receivers=HM.receivers(self.receivers_view()["receivers"], self.house_doc))
+                               rooms=self.ha_rooms, receivers=HM.receivers(self.receivers_view()["receivers"], self.house_doc),
+                               render=HM.render(self.house_doc, zip(self.eng.house.ids, self.eng.floor_names)))
         return out
 
 
@@ -766,12 +814,14 @@ def make_handler(app):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, body, ctype="application/json", cache="no-store"):
+        def _send(self, code, body, ctype="application/json", cache="no-store", retry_after=None):
             data = body if isinstance(body, bytes) else json.dumps(body, separators=(",", ":")).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", cache)
+            if retry_after is not None:
+                self.send_header("Retry-After", str(retry_after))
             self.end_headers()
             self.wfile.write(data)
 
@@ -845,6 +895,38 @@ def make_handler(app):
         def _authed(self):
             got = self.headers.get("Authorization", "")
             return bool(app.ingest_token) and hmac.compare_digest(got, "Bearer " + app.ingest_token)
+
+        def _show_marks(self, qs):
+            """The marks a floor or house picture's `?show=<key>,<key>...` names (spec 2026-10-02 house renders):
+            an absent or empty `show`, or a key nobody tracks, draws no pin for it."""
+            q = dict(kv.split("=", 1) for kv in qs.split("&") if "=" in kv)
+            keys = {k for k in (q.get("show") or "").split(",") if k}
+            return [m for m in app.render_marks() if m["key"] in keys]
+
+        def _mark(self, key):
+            """The tracked device's mark for the device-map route; KeyError (-> 404) for an untracked key."""
+            mark = next((m for m in app.render_marks() if m["key"] == key), None)
+            if mark is None:
+                raise KeyError(key)
+            return mark
+
+        def _render(self, make_png):
+            """Common machinery for the three render routes: the token, the renderer's warm-up (rulings 1-2), and
+            404 for an unknown device or floor (ruling 3, `make_png` raising KeyError)."""
+            if not self._authed():
+                return self._send(401, {"error": "bad token"})
+            if getattr(app, "renderer", None) is None:
+                return self._send(503, {"setup": True, "error": "no renderer (setup mode)"}, retry_after=2)
+            if app.render_error is not None:
+                return self._send(503, {"setup": False, "error": app.render_error}, retry_after=2)
+            if not app.renderer.ready:
+                return self._send(503, {"setup": False, "error": "the house's pictures are still being drawn"},
+                                  retry_after=2)
+            try:
+                png = make_png()
+            except KeyError:
+                return self._send(404, {"error": "not found"})
+            return self._send(200, png, "image/png")
 
         def _ingest(self):
             if app.ingest is None:
@@ -943,6 +1025,16 @@ def make_handler(app):
             if p == "/api/ingest/compare":
                 return self._send(200, {"mode": app.mode, "rows": jsonable(app.shadow_report),
                                         "unplaced": dict(app.ingest.unplaced) if app.ingest else {}})
+            m = re.fullmatch(r"/api/ingest/render/device/([0-9A-Za-z:_]+)\.png", p)
+            if m:
+                key = m.group(1)
+                return self._render(lambda: app.renderer.device(self._mark(key)))
+            m = re.fullmatch(r"/api/ingest/render/floor/([0-9A-Za-z_\-]+)\.png", p)
+            if m:
+                floor_id = m.group(1)
+                return self._render(lambda: app.renderer.floor(floor_id, self._show_marks(qs)))
+            if p == "/api/ingest/render/house.png":
+                return self._render(lambda: app.renderer.house(self._show_marks(qs)))
             if p == "/api/devices/seen":
                 src = app.ingest
                 return self._send(200, jsonable({"at": src.census_at if src else None,

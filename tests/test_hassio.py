@@ -37,6 +37,7 @@ async def test_an_entry_for_another_engine_moves_to_the_app_in_place(hass: HomeA
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "hassio_move"
     assert result["description_placeholders"]["current"] == "http://192.0.2.10:8765"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()          # the move reloads the entry: let it settle before the test ends
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "moved"
     entries = hass.config_entries.async_entries(DOMAIN)
     assert [e.entry_id for e in entries] == [old.entry_id]                       # the same entry: entities keep ids

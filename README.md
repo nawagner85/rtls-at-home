@@ -61,6 +61,8 @@ Each device the engine tracks becomes a Home Assistant device with three sensors
 | `sensor.<device>_floor` | the floor, e.g. `Main` | |
 | `sensor.<device>_location` | a sentence, e.g. `Near the ottoman in the Living Room` | |
 | `device_tracker.<device>` | `home`, or `not_home` once the device is away | |
+| `image.<device>_map` | *Map* - a picture of the device's floor, its room tinted, and its pin | |
+| `switch.<device>_show_on_house_maps` | *Show on house maps* - on by default; off keeps this device's pin off the floor and house pictures below (its own *Map* always shows it) | |
 
 `ha_area` is the Home Assistant area the engine's map links the room to, or the area with the room's name when the
 map leaves it unlinked.
@@ -70,7 +72,7 @@ Besides the tracked devices:
 | Device | Entities |
 |---|---|
 | **<Area> presence**, one per Home Assistant area a map room links to, in that area | `binary_sensor` (occupancy): on while a tracked device is in any room linked to the area; `devices` and `count` attributes |
-| **RTLS@Home engine** | *Status* (`tracking` / `applying` / `setup`), *Receivers heard* (with `total`), *Devices present* |
+| **RTLS@Home engine** | *Status* (`tracking` / `applying` / `setup`), *Receivers heard* (with `total`), *Devices present*, *House map* (every floor, exploded, with every shown device's pin), one ***<floor> map*** per floor |
 | **Each receiver**, connected via its ESPHome proxy's device when Home Assistant has one | *Heard* (connectivity), *Signal correction* (dB), *Placed in* (room, with `floor`) - diagnostic |
 
 Every device's *Visit* link opens the engine's page. **Download diagnostics** on the integration's page gathers what
@@ -85,6 +87,41 @@ overwritten.
 Sensors write their state when the room or floor changes, and otherwise at most every 10 seconds, so your
 database doesn't fill with tiny position changes. If the engine stops tracking a device without removing it,
 its entities become unavailable; you can delete it from its page.
+
+### Pictures for dashboards
+
+Every *Map*, *House map* and *<floor> map* is an ordinary `image` entity - redrawn only when what it shows changes,
+so a card that's open doesn't refetch for nothing. Drop one on a dashboard with a `picture-entity` card:
+
+```yaml
+type: picture-entity
+entity: image.keys_map
+show_name: false
+show_state: false
+```
+
+A floor or house picture is the same card, pointed at the engine's device instead of a tracked one:
+
+```yaml
+type: picture-entity
+entity: image.rtls_home_engine_house_map   # or image.rtls_home_engine_main_map for one floor
+show_name: false
+show_state: false
+```
+
+Turn a device's *Show on house maps* switch off to leave it off the floor and house pictures while its own *Map*
+keeps showing it - handy on a dashboard other people see.
+
+To attach a picture to a mobile notification, give the companion app's `image` attachment the entity's image proxy
+path:
+
+```yaml
+service: notify.mobile_app_my_phone
+data:
+  message: Keys left the house
+  data:
+    image: /api/image_proxy/image.keys_map
+```
 
 ### Ask your assistant
 
